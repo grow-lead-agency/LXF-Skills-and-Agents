@@ -7,6 +7,12 @@ Deployer, KSeF e-invoicing) + **NestJS 11 GraphQL BFF** + **React 19 storefront*
 Skills teach the AI agent *your* stack's conventions and gotchas so it writes code that
 fits your codebase on the first try, instead of generic boilerplate.
 
+## Quick start (full onboarding)
+
+Clone this repo, open your AI agent in it, and say **"onboard me"** — the agent follows
+[AGENTS.md](AGENTS.md) and walks you through installing everything: this pack, the
+recommended process skills, Context7, and agent context for the platform repo.
+
 ## Install
 
 As a plugin (recommended — one command, easy updates):
@@ -28,6 +34,25 @@ Or manually — copy any `skills/<name>/` directory into your repo's `.claude/sk
 | `mysql-8-for-laravel` | Index design for Eloquent, JSON columns, migration locking on large tables, database-queue contention, pagination at scale |
 | `deployer-php` | Deployer v7 zero-downtime releases, Laravel shared dirs, migration safety, supervisor/opcache after symlink flip |
 | `ksef-e-invoicing` | Polish KSeF integration via ksef-php-client — lifecycle, signing, queue jobs, test environment (regulatory facts date-stamped with sources) |
+
+### General stack skills
+
+| Skill | Covers |
+|---|---|
+| `php-coding-standards` | Modern PHP style — PER-CS, type declarations, formatting discipline |
+| `phpstan` | Static analysis — levels, baseline strategy, generics/phpdoc, CI integration |
+| `phpunit` | PHPUnit 11 — data providers, mocking, attributes, test organization |
+| `php-fpm` | PHP-FPM tuning — pool sizing, opcache, slowlog, production ops |
+| `graphql` | GraphQL deep-dive — N+1/DataLoader, security, federation, client integration |
+| `react-19` | React 19 patterns — actions, transitions, refs, compiler-era idioms |
+| `vite` | Vite config, env handling, build optimization, dev-server gotchas |
+| `vitest` | Vitest 4 — mocking, snapshots, jsdom, coverage |
+| `testing` | Testing strategy — what to test, test pyramid, CI gates |
+| `tdd` | Test-driven development workflow — red/green/refactor, mocking discipline |
+| `realtime-patterns` | WebSocket/SSE architecture patterns, reconnection, fan-out |
+| `redis` | Redis data structures, caching patterns, TTL strategy, pitfalls |
+| `docker` | Dockerfile authoring, compose v2, BuildKit, image optimization, security |
+| `terraform` | HCL patterns, state management, modules, CI/CD for infra |
 
 ## Recommended companions (public, free)
 
