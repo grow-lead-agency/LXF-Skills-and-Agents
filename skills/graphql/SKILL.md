@@ -300,8 +300,10 @@ mutation CreateEmail($input: CreateEmailInput!) {
 }
 ```
 
-**Why:** GraphQL always returns HTTP 200 (even for errors). `errors` in the payload = business
-errors (validation); `errors` at the root level = system errors (auth failure, server error).
+**Why:** Business failures should be represented as typed payload data so clients can handle them
+without parsing generic messages. Root-level `errors` represent request or execution failures;
+field errors after execution commonly arrive with HTTP 200, while parse, validation, auth,
+transport, and server failures may use 4xx/5xx. Clients must inspect both status and payload.
 
 ### Errors-as-data — Result Type union (stronger variant of the payload)
 
@@ -395,18 +397,25 @@ npm install @nestjs/graphql @nestjs/apollo @apollo/server graphql
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { join } from 'path';
+import { EmailModule } from './email/email.module';
+import { EmailService } from './email/email.service';
+import { createLoaders } from './graphql/loaders';
 
 @Module({
   imports: [
-    GraphQLModule.forRoot<ApolloDriverConfig>({
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'), // generated SDL — commit + diff in CI
-      sortSchema: true,             // deterministic output → clean diffs
-      graphiql: process.env.NODE_ENV !== 'production', // IDE only in dev
-      introspection: process.env.NODE_ENV !== 'production',
-      context: ({ req }) => ({
-        req,
-        loaders: createLoaders(),   // per-request DataLoaders — see references/dataloader-patterns.md
+      imports: [EmailModule],       // EmailModule must export EmailService
+      inject: [EmailService],
+      useFactory: (emailService: EmailService) => ({
+        autoSchemaFile: join(process.cwd(), 'src/schema.gql'), // generated SDL — commit + diff in CI
+        sortSchema: true,             // deterministic output → clean diffs
+        graphiql: process.env.NODE_ENV !== 'production', // IDE only in dev
+        introspection: process.env.NODE_ENV !== 'production',
+        context: ({ req }) => ({
+          req,
+          loaders: createLoaders(emailService), // explicit dependency, fresh loaders per request
+        }),
       }),
     }),
   ],
@@ -634,7 +643,10 @@ POST /graphql
 {"extensions": {"persistedQuery": {"version": 1, "sha256Hash": "abc123..."}}}
 ```
 
-APQ solves two things: bandwidth (smaller requests) + GET caching (hash in URL → CDN caches).
+APQ reduces bandwidth after the initial hash negotiation, but requests remain POST by default.
+Apollo Client can opt query hash requests into GET with `useGETForHashedQueries: true`; mutations
+remain POST. That separate GET opt-in can make the hash URL CDN-cacheable when the CDN and server
+use compatible cache headers.
 ⚠️ APQ is **not** a security measure — see "APQ vs. trusted documents" in
 `references/security-armor.md`.
 
@@ -730,12 +742,10 @@ fragment EmailRowFields on Email {
 
 ```typescript
 // components/EmailRow.tsx — the fragment lives next to the component
-import { FragmentType, useFragment } from '@/generated/graphql';
-import { EmailRowFieldsFragmentDoc } from '@/generated/graphql';
+import type { EmailRowFieldsFragment } from '@/generated/graphql';
 
-export function EmailRow({ data }: { data: FragmentType<typeof EmailRowFieldsFragmentDoc> }) {
-  const email = useFragment(EmailRowFieldsFragmentDoc, data);
-  return <tr><td>{email.recipient}</td><td>{email.status}</td></tr>;
+export function EmailRow({ data }: { data: EmailRowFieldsFragment }) {
+  return <tr><td>{data.recipient}</td><td>{data.status}</td></tr>;
 }
 ```
 
@@ -998,14 +1008,19 @@ subgraph is a configuration change, not a rewrite.
 1. **N+1 without DataLoader** — the most common perf issue. Every nested resolver = 1 downstream
    call × N items. Fix: DataLoader batching + batch endpoints on the backend.
 
-2. **HTTP 200 even on error** — a GraphQL response is always 200 OK; errors live in the `errors`
-   array. Clients and tests must explicitly check `response.errors` (not just the HTTP status).
+2. **HTTP status is not enough** — field errors after successful GraphQL execution commonly return
+   HTTP 200 with an `errors` array (and possibly partial `data`). Malformed requests, parse or
+   validation failures, unsupported media types, authentication failures, and transport failures
+   may return 4xx/5xx depending on the negotiated media type and server. Clients and tests must
+   check both the HTTP status and `response.errors`.
 
 3. **Query complexity DoS** — without depth/complexity limits an attacker can send an
    exponential query. `maxDepth: 10` and `costLimit: 1000` are MANDATORY for production.
 
-4. **CDN caching** — GraphQL POST requests are not CDN-cacheable. Fix: Automatic Persisted
-   Queries (APQ) → turns POST into GET with a hash parameter → CDN caches.
+4. **CDN caching** — GraphQL POST requests are not normally cached by shared CDNs. APQ only
+   negotiates a query hash; it does not change the HTTP method by itself. For queries, configure
+   the client separately with `useGETForHashedQueries: true` and compatible cache headers if GET
+   caching is desired. Mutations must remain POST.
 
 5. **Introspection in production** — lets an attacker map the whole schema. Disable or
    auth-guard it. Disable field suggestions ("Did you mean X?") along with it.

@@ -1,163 +1,200 @@
 # AI Code Review
 
-> How to validate AI-generated code before production. AI code is syntactically perfect
-> but frequently semantically wrong — especially around auth, permissions, and state.
+> How to validate AI-generated code before production. AI code is often syntactically
+> polished but semantically wrong around authorization, persistence, and state.
 
 ---
 
 ## Core Principle
 
-**Treat AI-generated code as untrusted by default.** Review it with the same scrutiny
-as code from an unknown external contributor. AI does not understand your security model,
-business logic, or data sensitivity.
+**Treat AI-generated code as untrusted by default.** Review it with the same scrutiny as
+code from an unknown external contributor. The model does not know the application's policy
+boundaries, MySQL constraints, GraphQL contract, or data sensitivity unless the repository
+makes them explicit.
 
 ---
 
 ## Security Review Checklist
 
-Run this checklist on every AI-generated PR before merge:
+Run this checklist on every AI-generated PR before merge.
 
-### Auth & Permissions
+### Laravel Auth and Policies
 
-- [ ] Every Server Action checks `getUser()` / session at the top
-- [ ] No Server Action trusts client-provided user IDs
-- [ ] RLS policies don't use `USING (true)` on sensitive tables
-- [ ] `WITH CHECK` clause exists on INSERT/UPDATE policies
-- [ ] Middleware auth check doesn't have inverted logic (common AI mistake)
-- [ ] Admin routes are protected (not just hidden from UI)
+- [ ] Every protected controller/action calls `$this->authorize(...)`, `Gate::authorize(...)`,
+      or uses the corresponding `can` middleware
+- [ ] Policies derive the actor from the authenticated request, never from a submitted `user_id`
+- [ ] Form Requests validate and authorize external input before application services run
+- [ ] Mass assignment does not permit ownership, role, tenant, or status fields unintentionally
+- [ ] Admin endpoints are protected server-side, not merely hidden in React
+- [ ] Policy tests cover owner, non-owner, privileged role, and unauthenticated requests
 
-### Data Exposure
+### NestJS GraphQL Auth
 
-- [ ] No `SUPABASE_SERVICE_ROLE_KEY` in client components
-- [ ] No `.env` values exposed via `NEXT_PUBLIC_` that shouldn't be
-- [ ] No raw SQL in client-side code
-- [ ] Error responses don't expose internal error messages/stack traces
-- [ ] API responses don't include fields the user shouldn't see
+- [ ] Protected resolvers use the expected auth guard and authorization layer
+- [ ] Resolver code reads the actor from GraphQL context, not from mutation input
+- [ ] Field resolvers do not expose data the actor cannot read through the parent query
+- [ ] Input DTOs use validation decorators and the global validation pipe is enabled
+- [ ] Domain errors map to stable GraphQL errors without stack traces or internal SQL messages
+- [ ] Guard and resolver integration tests run through the GraphQL execution boundary
 
-### Input Validation
+### MySQL and Data Integrity
 
-- [ ] All external input validated with Zod before processing
-- [ ] No template literal SQL (use parameterized queries / Supabase client)
-- [ ] File uploads validated (type, size, content)
-- [ ] URL parameters decoded and validated
+- [ ] Queries use Eloquent/query bindings or parameterized SQL; no string interpolation
+- [ ] Foreign keys, unique constraints, and nullability enforce the same invariants as validation
+- [ ] Multi-write operations use a transaction and test rollback on the second-write failure
+- [ ] Read-modify-write flows handle concurrency (locking, unique constraint, or idempotency key)
+- [ ] Migrations are reversible where the project requires rollback
+- [ ] API/GraphQL responses select explicit fields and do not serialize internal columns by accident
 
-### CORS & Headers
+### Data Exposure and Input Validation
 
-- [ ] CORS not set to `Access-Control-Allow-Origin: *` in production
-- [ ] Allowed origins list is explicit
-- [ ] Security headers present (CSP, X-Frame-Options, etc.)
+- [ ] No secrets or server-only environment variables enter the Vite bundle
+- [ ] Error responses omit exception class names, SQL, file paths, and stack traces
+- [ ] Laravel inputs use Form Requests or explicit validation rules
+- [ ] NestJS inputs use DTO validation; GraphQL scalars are not treated as sufficient validation
+- [ ] File uploads validate type, size, content, and storage path
+- [ ] URLs and identifiers are decoded, normalized, and authorized before use
+
+### CORS and Headers
+
+- [ ] Production CORS origins are explicit
+- [ ] Credentials are allowed only for trusted origins
+- [ ] nginx/application security headers are configured once and verified in an integration test
+- [ ] The GraphQL endpoint does not expose introspection or playground contrary to project policy
 
 ---
 
 ## Common AI Mistakes
 
-### 1. Auth check direction is wrong
+### 1. Authorization direction is inverted
 
-```typescript
-// AI WROTE THIS (wrong):
-if (user.role === 'admin') {
-  return { error: 'Unauthorized' }  // Blocks admins!
+```php
+// AI WROTE THIS (wrong): blocks the owner and permits everyone else.
+if ($booking->user_id === $request->user()->id) {
+    abort(403);
 }
 
-// CORRECT:
-if (user.role !== 'admin') {
-  return { error: 'Unauthorized' }
+// CORRECT: centralize the rule in BookingPolicy.
+$this->authorize('delete', $booking);
+$booking->delete();
+```
+
+### 2. Trusting client-provided ownership
+
+```php
+// AI WROTE THIS (wrong): caller chooses the owner.
+Booking::create($request->validated()); // validated payload includes user_id
+
+// CORRECT: derive ownership from the authenticated actor.
+$booking = $request->user()->bookings()->create(
+    $request->safe()->except('user_id')
+);
+```
+
+The regression test must submit another user's ID and assert both `403/422` behavior and
+`assertDatabaseMissing()` for the unauthorized row.
+
+### 3. Resolver trusts a mutation input actor ID
+
+```typescript
+// AI WROTE THIS (wrong): userId is attacker-controlled.
+@Mutation(() => Booking)
+deleteBooking(@Args('id') id: string, @Args('userId') userId: string) {
+  return this.bookingService.delete(id, userId)
+}
+
+// CORRECT: actor comes from authenticated GraphQL context.
+@UseGuards(GqlAuthGuard)
+@Mutation(() => Booking)
+deleteBooking(@CurrentUser() actor: AuthenticatedUser, @Args('id') id: string) {
+  return this.bookingService.deleteForActor(id, actor)
 }
 ```
 
-### 2. Missing null check on user
+### 4. Application validation without a database invariant
 
-```typescript
-// AI WROTE THIS (wrong):
-const { data: { user } } = await supabase.auth.getUser()
-const bookings = await getBookings(user.id) // user can be null!
-
-// CORRECT:
-const { data: { user } } = await supabase.auth.getUser()
-if (!user) return { success: false, error: 'You must be signed in.' }
-const bookings = await getBookings(user.id)
-```
-
-### 3. Trusting client-provided data
-
-```typescript
-// AI WROTE THIS (wrong):
-export async function deleteBooking(bookingId: string, userId: string) {
-  // userId comes from client — user can delete anyone's booking!
-  await supabase.from('bookings').delete().eq('id', bookingId).eq('user_id', userId)
-}
-
-// CORRECT:
-export async function deleteBooking(bookingId: string) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized' }
-  // userId from server session, not client
-  await supabase.from('bookings').delete().eq('id', bookingId).eq('user_id', user.id)
+```php
+// Validation alone can race: two requests may both pass exists() before either insert.
+if (!Booking::where('external_id', $externalId)->exists()) {
+    Booking::create(['external_id' => $externalId]);
 }
 ```
 
-### 4. Overly broad RLS
+Back critical uniqueness with a MySQL unique index and translate duplicate-key failures into
+the public domain error. Test two competing writes or at minimum assert the constraint exists
+and the second insert fails predictably.
 
-```typescript
-// AI WROTE THIS (wrong):
-CREATE POLICY "allow_all" ON bookings FOR ALL USING (true);
+### 5. Transaction missing around related writes
+
+```php
+// AI WROTE THIS (wrong): partial state remains if item creation fails.
+$order = Order::create($attributes);
+$order->items()->createMany($items);
 
 // CORRECT:
-CREATE POLICY "users_own_bookings" ON bookings
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "users_create_own" ON bookings
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+$order = DB::transaction(function () use ($attributes, $items) {
+    $order = Order::create($attributes);
+    $order->items()->createMany($items);
+    return $order;
+});
 ```
 
-### 5. Async/await mistakes
+### 6. Missing `await` in the BFF
 
 ```typescript
-// AI WROTE THIS (wrong — missing await):
-const data = supabase.from('bookings').select('*')
-console.log(data) // Promise, not data!
+// AI WROTE THIS (wrong): returns before mapping errors or applying output filtering.
+const booking = this.laravelClient.createBooking(input)
+return this.presenter.present(booking)
 
 // CORRECT:
-const { data } = await supabase.from('bookings').select('*')
+const booking = await this.laravelClient.createBooking(input)
+return this.presenter.present(booking)
 ```
 
 ---
 
 ## Mutation Testing
 
-Verify test quality by intentionally breaking code:
+Verify test quality by intentionally breaking one invariant at a time:
 
-1. Change a condition (`===` → `!==`)
-2. Remove an auth check
-3. Change a return value
-4. Run `npm test`
-5. If tests still pass → tests are weak, fix them
+1. Invert a Laravel policy condition.
+2. Remove `@UseGuards()` from a resolver.
+3. Remove a MySQL unique constraint in an isolated test migration.
+4. Delete a transaction wrapper.
+5. Run the smallest relevant PHPUnit/Jest suite.
+6. If tests still pass, restore the code and add the missing behavior test.
 
 ```bash
-# Manual mutation test flow:
-# 1. Break something intentional
-# 2. Run tests
-npm test
-# 3. If tests pass → BAD (test doesn't catch the bug)
-# 4. Fix the code back
-# 5. Write a better test that catches the mutation
+# Laravel policy + MySQL feature tests
+php artisan test --filter=BookingAuthorizationTest
+
+# NestJS resolver/guard tests
+npm run test --workspace=bff -- booking.resolver
 ```
 
-For automated mutation testing, consider Stryker (optional — manual is usually enough).
+Automated mutation tools are optional; the gate is whether a realistic authorization or data
+integrity defect makes the suite fail.
 
 ---
 
-## Type Safety Audit
+## Type and Static Analysis Audit
 
 ```bash
-# Find all 'any' types (should be zero in new code)
-grep -rn ': any' src/ --include='*.ts' --include='*.tsx' | grep -v node_modules | grep -v '.test.'
+# PHP type and framework analysis
+vendor/bin/phpstan analyse
 
-# Find unchecked array access
-grep -rn '\[0\]' src/ --include='*.ts' --include='*.tsx' | grep -v node_modules
+# TypeScript type checking
+npx tsc --noEmit
 
-# Find missing error handling
-grep -rn '\.catch(() => {})' src/ --include='*.ts' --include='*.tsx'
+# Find new explicit any types outside tests/generated code
+grep -rn ': any' bff/src frontend/src --include='*.ts' --include='*.tsx' \
+  | grep -v '\.test\.' | grep -v generated
+
+# Find swallowed promise rejections / empty catches for manual review
+grep -rn 'catch.*{}\|\.catch(() => {})' bff/src frontend/src --include='*.ts' --include='*.tsx'
 ```
+
+Static analysis is a gate, not proof of correct authorization or persistence behavior.
 
 ---
 
@@ -165,21 +202,29 @@ grep -rn '\.catch(() => {})' src/ --include='*.ts' --include='*.tsx'
 
 When an AI writes tests, verify:
 
-1. **The test actually fails when you break the code** — change the implementation, run the test. If it still passes, the test is useless.
-2. **Assertions test behavior, not implementation** — `expect(result.status).toBe('ok')` is good. `expect(mockFn).toHaveBeenCalledTimes(3)` might be testing implementation.
-3. **Error paths are covered** — AI loves happy-path tests. Check for failure tests.
-4. **Mocks match reality** — AI mocks may return shapes that don't match real API responses.
+1. **The test fails when the policy/guard/constraint is broken.** A green test that never crosses
+   the real boundary is not evidence.
+2. **Authorization tests use at least two distinct users.** Reusing one actor hides ownership bugs.
+3. **Laravel feature tests use MySQL when behavior depends on MySQL semantics.** SQLite can mask
+   collation, locking, JSON, and constraint differences.
+4. **Resolver tests cover guard integration.** Calling a resolver method directly bypasses NestJS
+   guards unless the test explicitly invokes the framework boundary.
+5. **Mocks match the Laravel/GraphQL contract.** Generated mocks often omit error extensions,
+   pagination wrappers, or nullable fields.
+6. **Assertions test externally visible behavior.** Prefer HTTP/GraphQL status, response shape,
+   and committed database state over internal call counts.
 
 ---
 
 ## Review Workflow
 
-1. AI generates code
-2. Run `npx tsc --noEmit && npm run lint` — catches syntax/type issues
-3. Read the diff — focus on auth, permissions, data flow
-4. Run security checklist above
-5. Run mutation test on critical paths
-6. Only then commit
+1. Read the diff and identify changed trust boundaries and persisted invariants.
+2. Run `vendor/bin/phpstan analyse`, `npx tsc --noEmit`, and lint.
+3. Run focused PHPUnit and Jest/Vitest suites.
+4. Review Laravel policy/Form Request coverage and NestJS guard/resolver coverage.
+5. Verify MySQL constraints and transaction behavior against the migration.
+6. Perform one mutation test on each critical authorization/data path.
+7. Run the relevant Playwright journey before merge.
 
 ---
 
@@ -187,4 +232,6 @@ When an AI writes tests, verify:
 
 - https://brightsec.com/blog/5-best-practices-for-reviewing-and-approving-ai-generated-code/
 - https://docs.github.com/en/copilot/tutorials/review-ai-generated-code
-- https://www.mabl.com/blog/when-ai-writes-code-who-accountable-quality
+- https://laravel.com/docs/11.x/authorization
+- https://laravel.com/docs/11.x/database-testing
+- https://docs.nestjs.com/security/authorization

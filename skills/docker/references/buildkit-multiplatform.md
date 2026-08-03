@@ -1,26 +1,26 @@
 # BuildKit Features + Multi-platform Builds
 
 ## Table of Contents
-1. [BuildKit Basics](#basics)
-2. [Cache Mounts (`--mount=type=cache`)](#cache-mounts)
-3. [Secret Mounts (`--mount=type=secret`)](#secret-mounts)
-4. [SSH Forwarding (`--mount=type=ssh`)](#ssh-mounts)
-5. [Bind Mounts in RUN (`--mount=type=bind`)](#bind-mounts)
-6. [Inline Cache (`--cache-from`)](#inline-cache)
-7. [Multi-platform Builds (buildx)](#multiplatform)
-8. [CI/CD Integration](#cicd)
-9. [Docker Bake (`docker buildx bake`)](#bake)
-10. [Named Build Contexts (`--build-context`)](#named-contexts)
-11. [`COPY --link`](#copy-link)
-12. [`ADD --checksum` (+ git/tar behaviors)](#add-checksum)
-13. [`RUN --network` (hermetic build steps)](#run-network)
-14. [Build-time Attestations (`--provenance`, `--sbom`)](#attestations)
-15. [OCI Annotations (`--annotation`)](#annotations)
-16. [Build Debugging (`docker buildx debug --invoke`)](#debug)
+1. [BuildKit Basics](#buildkit-basics)
+2. [Cache Mounts (mount type cache)](#cache-mounts-mount-type-cache)
+3. [Secret Mounts (mount type secret)](#secret-mounts-mount-type-secret)
+4. [SSH Forwarding (mount type ssh)](#ssh-forwarding-mount-type-ssh)
+5. [Bind Mounts in RUN (mount type bind)](#bind-mounts-in-run-mount-type-bind)
+6. [Inline Cache (cache-from)](#inline-cache-cache-from)
+7. [Multi-platform Builds (buildx)](#multi-platform-builds-buildx)
+8. [CI/CD Integration](#cicd-integration)
+9. [Docker Bake (`docker buildx bake`)](#docker-bake-docker-buildx-bake)
+10. [Named Build Contexts (build-context)](#named-build-contexts-build-context)
+11. [COPY link](#copy-link)
+12. [ADD checksum and Git/tar Behaviors](#add-checksum-and-gittar-behaviors)
+13. [RUN network (Hermetic Build Steps)](#run-network-hermetic-build-steps)
+14. [Build-time Attestations (Provenance and SBOM)](#build-time-attestations-provenance-and-sbom)
+15. [OCI Annotations](#oci-annotations)
+16. [Build Debugging (docker buildx debug invoke)](#build-debugging-docker-buildx-debug-invoke)
 
 ---
 
-## BuildKit Basics {#basics}
+## BuildKit Basics
 
 BuildKit is the default build engine since Docker 23.0. Enabled automatically.
 For older Docker, set: `DOCKER_BUILDKIT=1`
@@ -40,7 +40,7 @@ This pins to the latest Docker frontend and unlocks all BuildKit features.
 
 ---
 
-## Cache Mounts (`--mount=type=cache`) {#cache-mounts}
+## Cache Mounts (mount type cache)
 
 Cache mounts share directories between build runs WITHOUT committing to image layers.
 Package managers download packages to cache → next build reuses them.
@@ -91,7 +91,7 @@ docker builder prune --filter type=exec.cachemount
 
 ---
 
-## Secret Mounts (`--mount=type=secret`) {#secret-mounts}
+## Secret Mounts (mount type secret)
 
 Secrets available at build time but NOT visible in image layers or `docker history`.
 Use for: NPM_TOKEN, GITHUB_TOKEN, private registry auth, API keys for build steps.
@@ -134,7 +134,7 @@ GitHub Actions:
 
 ---
 
-## SSH Forwarding (`--mount=type=ssh`) {#ssh-mounts}
+## SSH Forwarding (mount type ssh)
 
 Clone private GitHub repos without embedding SSH keys in image.
 
@@ -171,7 +171,7 @@ docker build --ssh default .
 
 ---
 
-## Bind Mounts in RUN (`--mount=type=bind`) {#bind-mounts}
+## Bind Mounts in RUN (mount type bind)
 
 Mount files from build context without COPYing them into the image.
 Useful for configuration files needed only during build.
@@ -188,7 +188,7 @@ RUN --mount=type=bind,source=tests,target=tests \
 
 ---
 
-## Inline Cache (`--cache-from`) {#inline-cache}
+## Inline Cache (cache-from)
 
 Reuse layers from a previously pushed image (e.g., in CI where local cache is gone).
 
@@ -226,7 +226,7 @@ GitHub Actions cache:
 
 ---
 
-## Multi-platform Builds (buildx) {#multiplatform}
+## Multi-platform Builds (buildx)
 
 Build images that run on both AMD64 (x86) and ARM64 (Apple Silicon, ARM cloud instances).
 Required for: ARM-based VPS/cloud instances, Raspberry Pi, Apple Silicon dev consistency.
@@ -255,10 +255,11 @@ docker buildx build \
   .
 
 # Build locally for testing (only one platform at a time without registry)
+# --load imports the single-platform result into the local Docker image store
 docker buildx build \
   --platform linux/arm64 \
   --tag myapp:arm64-test \
-  --load \  # load into local docker images
+  --load \
   .
 ```
 
@@ -316,7 +317,7 @@ docker buildx imagetools create \
 
 ---
 
-## CI/CD Integration {#cicd}
+## CI/CD Integration
 
 ### GitHub Actions (Complete Pipeline)
 
@@ -406,7 +407,7 @@ docker build \
 
 ---
 
-## Docker Bake (`docker buildx bake`) {#bake}
+## Docker Bake (`docker buildx bake`)
 
 Bake is a declarative front-end for buildx. Instead of a shell loop of `docker build`
 invocations, you describe every image as a **target** in a file (`docker-bake.hcl`,
@@ -565,7 +566,7 @@ docker buildx bake --set "*.no-cache=true" --set "*.output=type=registry"
 ### Multi-platform in bake
 
 Set `platforms` per target (or globally with `--set "*.platform=..."`). Same QEMU /
-`docker-container` builder requirements as raw buildx (see [§7](#multiplatform)).
+`docker-container` builder requirements as raw buildx (see [§7](#multi-platform-builds-buildx)).
 
 ```hcl
 target "release" {
@@ -670,7 +671,7 @@ docker buildx bake api-matrix                    # build api-node20 + api-node22
 
 ---
 
-## Named Build Contexts (`--build-context`) {#named-contexts}
+## Named Build Contexts (build-context)
 
 `--build-context name=value` exposes an **additional** context to the build alongside the
 main one. Inside the Dockerfile, `FROM name`, `COPY --from=name`, and
@@ -718,11 +719,11 @@ docker buildx build --build-context app1=app1/src --build-context app2=app2/src 
 
 > In Bake the equivalent is `target.contexts` (a map). A Bake context value of
 > `target:base` chains one target's output as another target's named context — a build
-> pipeline without an intermediate registry push. See [§Docker Bake](#bake).
+> pipeline without an intermediate registry push. See [§Docker Bake](#docker-bake-docker-buildx-bake).
 
 ---
 
-## `COPY --link` {#copy-link}
+## COPY link
 
 `COPY --link <src> <dest>` (and `ADD --link`, Dockerfile 1.4+) copies files into an
 **independent layer** that is rebased on top of previous layers instead of being computed
@@ -752,11 +753,11 @@ recommended default for artifact copies.
   (e.g. merging into an existing dir, or `--chown` matching a pre-created user), the
   semantics differ; omit `--link` for those.
 - Best paired with registry/inline cache so the independent layer can actually be reused
-  across machines (see [Inline Cache](#inline-cache)).
+  across machines (see [Inline Cache](#inline-cache-cache-from)).
 
 ---
 
-## `ADD --checksum` (+ git/tar behaviors) {#add-checksum}
+## ADD checksum and Git/tar Behaviors
 
 `ADD --checksum=<hash> <src> <dest>` (Dockerfile 1.6+) verifies the integrity of a remote
 resource before adding it — fail the build if the download doesn't match.
@@ -794,7 +795,7 @@ ADD https://example.com/archive.zip /usr/src/things/
 
 ---
 
-## `RUN --network` (hermetic build steps) {#run-network}
+## RUN network (Hermetic Build Steps)
 
 `RUN --network=<TYPE>` (Dockerfile 1.3+) controls the networking environment for a single
 build step.
@@ -834,7 +835,7 @@ docker buildx build --allow network.host .
 
 ---
 
-## Build-time Attestations (`--provenance`, `--sbom`) {#attestations}
+## Build-time Attestations (Provenance and SBOM)
 
 BuildKit can attach **SLSA provenance** (how the image was built) and an **SBOM** (what
 software it contains) to the image *at build time*, wrapped in in-toto JSON and stored as a
@@ -877,7 +878,7 @@ can't embed attestations into an image manifest and instead emit JSON files in t
 
 ---
 
-## OCI Annotations (`--annotation`) {#annotations}
+## OCI Annotations
 
 Annotations and `org.opencontainers.image.*` labels make an image **traceable** back to its
 source, revision, and build time — without inspecting layers. Two mechanisms:
@@ -909,12 +910,12 @@ LABEL org.opencontainers.image.source="https://github.com/my-org/app" \
 Common `org.opencontainers.image.*` keys for traceability: `source` (repo URL), `revision`
 (git SHA), `created` (RFC 3339 timestamp), `version`, `title`, `description`, `licenses`,
 `authors`. In CI, `docker/metadata-action` emits these labels automatically (`labels` output)
-— wire them into `build-push-action` (see [CI/CD Integration](#cicd) and `cicd-git-bridge.md`).
+— wire them into `build-push-action` (see [CI/CD Integration](#cicd-integration) and `cicd-git-bridge.md`).
 In Bake, use `target.annotations` (with optional `index,manifest:` prefix) and `target.labels`.
 
 ---
 
-## Build Debugging (`docker buildx debug --invoke`) {#debug}
+## Build Debugging (docker buildx debug invoke)
 
 When a build fails on a `RUN` step or produces a wrong final image, the debug monitor drops you
 into a shell **inside the build** without exporting/loading the image. Experimental — requires
@@ -940,4 +941,3 @@ editing the Dockerfile), `rollback` (re-run the interactive container with the s
 > is **not** a BuildKit/buildx feature — see the HEALTHCHECK section in `dockerfile-patterns.md`.
 
 Sources: https://docs.docker.com/build/bake/reference/, https://docs.docker.com/reference/dockerfile/, https://docs.docker.com/build/concepts/context/, https://docs.docker.com/build/metadata/attestations/, https://docs.docker.com/reference/cli/docker/buildx/build/, https://github.com/docker/buildx/blob/master/docs/debugging.md, https://www.docker.com/blog/dockerfiles-now-support-multiple-build-contexts/
-

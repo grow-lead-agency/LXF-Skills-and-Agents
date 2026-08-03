@@ -81,10 +81,13 @@ When you run `terraform init` on a Mac (`darwin_arm64`), the lock gets `h1:` onl
 Pre-populate checksums for **all platforms the team + CI use** at once:
 
 ```bash
+# Apple Silicon developer machines
+# Linux x86_64 CI runners
+# Optional Linux ARM nodes / CI runners
 terraform providers lock \
-  -platform=darwin_arm64 \   # team on Apple Silicon Mac
-  -platform=linux_amd64 \    # Linux CI runners (x86_64)
-  -platform=linux_arm64      # optional ARM nodes / CI runners
+  -platform=darwin_arm64 \
+  -platform=linux_amd64 \
+  -platform=linux_arm64
 ```
 
 This downloads the needed metadata from the origin registry and writes `h1:` + `zh:` for all three platforms into `.terraform.lock.hcl`. The lock is then stable across Mac dev and Linux CI and nobody rewrites it by accident. **Run this after every provider add/upgrade and commit the result.** (On Windows the whole command must be on one line without `\`.)

@@ -145,7 +145,7 @@ services:
       llm:                        # long syntax: rename injected env vars
         endpoint_var: AI_MODEL_URL
         model_var: AI_MODEL_NAME
-      - embedding                 # short syntax also allowed
+      embedding: {}               # mapping entry with default injected env var names
 
 models:
   llm:
@@ -369,4 +369,3 @@ and switch via `baseURL`. For local embeddings, DMR's `ai/all-minilm` with
 - https://docs.docker.com/ai/mcp-gateway/
 - https://docs.docker.com/compose/how-tos/model-runner/
 - https://www.docker.com/blog/announcing-docker-model-runner-ga/
-

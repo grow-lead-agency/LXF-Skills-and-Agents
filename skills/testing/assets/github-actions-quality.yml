@@ -1,19 +1,37 @@
-# Enhanced Quality Gate job for GitHub Actions
-# Replaces the minimal "quality" job from deploy-workflow templates
-# Copy into your .github/workflows/deploy.yml
-#
-# Features over baseline:
-# - Separate steps for tsc, lint, test (clearer failure diagnosis)
-# - Conditional supabase test db (only if supabase/tests/ exists)
-# - Vitest GitHub reporter for inline PR annotations
-# - Optional coverage upload
+# Full-stack quality gate for Laravel 11 + MySQL 8, NestJS GraphQL, and React + Vite
+# Assumes Composer and npm manifests are at the repository root. Adjust workspace script
+# names if the BFF and frontend use different root-level orchestration commands.
 
 jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: app_testing
+          MYSQL_USER: app_testing
+          MYSQL_PASSWORD: test-only-password
+          MYSQL_ROOT_PASSWORD: root-test-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=root-test-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl, pdo_mysql
+          coverage: none
+          tools: composer:2
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -21,30 +39,48 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Install Node dependencies
         run: npm ci
 
-      - name: G1a — Type check
-        run: npx tsc --noEmit
+      - name: Validate Composer metadata
+        run: composer validate --strict
 
-      - name: G1b — Lint
-        run: npm run lint
+      - name: Laravel migrations
+        run: php artisan migrate --force
+        env: &laravel-test-env
+          APP_ENV: testing
+          APP_KEY: base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: app_testing
+          DB_USERNAME: app_testing
+          DB_PASSWORD: test-only-password
 
-      - name: G1c — Unit & Integration tests
+      - name: PHPUnit 11 — Laravel unit and feature tests
+        run: vendor/bin/phpunit
+        env: *laravel-test-env
+
+      - name: Type check Node workspaces
+        run: npm run typecheck --if-present
+
+      - name: Lint Node workspaces
+        run: npm run lint --if-present
+
+      - name: NestJS/Jest and React/Vitest suites
         run: npm test
         env:
           CI: true
 
-      - name: G1d — Supabase DB tests (pgTAP)
-        if: hashFiles('supabase/tests/**') != ''
-        run: |
-          # Install Supabase CLI
-          npm install -g supabase
-          supabase start
-          supabase test db
-          supabase stop
+      - name: Coverage
+        run: npm run test:coverage --if-present
+        env:
+          CI: true
 
-      - name: G1e — E2E tests (Playwright)
+      - name: E2E tests
         if: hashFiles('e2e/**') != '' || hashFiles('playwright.config.*') != ''
         run: |
           npx playwright install --with-deps chromium
@@ -59,11 +95,3 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
-
-      # Optional: coverage upload (uncomment if using Codecov)
-      # - name: Upload coverage
-      #   if: env.CODECOV_TOKEN != ''
-      #   uses: codecov/codecov-action@v4
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     files: ./coverage/lcov.info

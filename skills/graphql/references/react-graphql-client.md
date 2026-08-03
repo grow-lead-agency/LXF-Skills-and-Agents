@@ -23,10 +23,10 @@ normalization across list/detail, prefer urql + Graphcache (see `urql-client.md`
 
 ```bash
 # Install
-bun add graphql-request graphql
+npm install graphql-request graphql
 
 # Codegen (dev dep)
-bun add -D @graphql-codegen/cli \
+npm install --save-dev @graphql-codegen/cli \
   @graphql-codegen/typescript \
   @graphql-codegen/typescript-operations \
   @graphql-codegen/typescript-react-query
@@ -36,9 +36,15 @@ bun add -D @graphql-codegen/cli \
 // lib/graphql-client.ts
 import { GraphQLClient } from 'graphql-request'
 
+const graphqlBaseUrl = import.meta.env.VITE_GRAPHQL_URL
+
+if (!graphqlBaseUrl) {
+  throw new Error('VITE_GRAPHQL_URL is required')
+}
+
 function createGqlClient(token?: string) {
   return new GraphQLClient(
-    `${process.env.NEXT_PUBLIC_GRAPHQL_URL}/graphql`, // NestJS BFF GraphQL endpoint
+    `${graphqlBaseUrl}/graphql`, // NestJS BFF GraphQL endpoint
     {
       headers: token
         ? { Authorization: `Bearer ${token}` }
@@ -47,14 +53,9 @@ function createGqlClient(token?: string) {
   )
 }
 
-// Client-side singleton
+// Vite client-side default. Recreate the client with the current token after login/refresh.
 export const gqlClient = createGqlClient()
-
-// Server-side (RSC) — with session token
-export async function getServerGqlClient() {
-  const session = await getSession() // your auth helper
-  return createGqlClient(session?.token)
-}
+export { createGqlClient }
 ```
 
 ## graphql-codegen configuration
@@ -79,14 +80,13 @@ generates:
       - typescript
       - typescript-operations
       - typescript-react-query
-
-  config:
-    reactQueryVersion: 5
-    exposeQueryKeys: true           # exports query key factory
-    exposeFetcher: true
-    fetcher: '@/lib/graphql-client#gqlClient'
-    addInfiniteQuery: true          # infinite scroll variants
-    dedupeFragments: true
+    config:
+      reactQueryVersion: 5
+      exposeQueryKeys: true           # exports query key factory
+      exposeFetcher: true
+      fetcher: '@/lib/graphql-client#gqlClient'
+      addInfiniteQuery: true          # infinite scroll variants
+      dedupeFragments: true
 ```
 
 ```json
@@ -240,7 +240,7 @@ src/
       EmailDetail.graphql
   pages/
     emails/
-      page.tsx
+      EmailsPage.tsx
       EmailsPage.graphql    # page query composes fragments
 ```
 
@@ -275,16 +275,13 @@ query GetEmailsPage($first: Int, $after: String) {
 
 ```typescript
 // components/emails/EmailRow.tsx
-import { FragmentType, useFragment } from '@/generated/graphql'
-import { EmailRowFieldsFragmentDoc } from '@/generated/graphql'
+import type { EmailRowFieldsFragment } from '@/generated/graphql'
 
 interface Props {
-  email: FragmentType<typeof EmailRowFieldsFragmentDoc>
+  email: EmailRowFieldsFragment
 }
 
-export function EmailRow({ email: emailFragment }: Props) {
-  const email = useFragment(EmailRowFieldsFragmentDoc, emailFragment)
-
+export function EmailRow({ email }: Props) {
   return (
     <TableRow>
       <TableCell>{email.recipient}</TableCell>
@@ -297,38 +294,41 @@ export function EmailRow({ email: emailFragment }: Props) {
 }
 ```
 
-## SSR (e.g. Next.js App Router)
+## Client-side prefetch in a Vite app
 
 ```typescript
-// app/emails/page.tsx — Server Component
-import { getServerGqlClient } from '@/lib/graphql-client'
+// main.tsx — prefetch route-critical data before the first render when needed
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { gqlClient } from '@/lib/graphql-client'
 import { GetEmailsDocument } from '@/generated/graphql'
-import { HydrationBoundary, dehydrate, QueryClient } from '@tanstack/react-query'
-import { EmailsTable } from './EmailsTable'
+import { App } from './App'
 
-export default async function EmailsPage() {
-  const queryClient = new QueryClient()
-  const serverClient = await getServerGqlClient()
+const queryClient = new QueryClient()
 
-  // Prefetch on the server
-  await queryClient.prefetchQuery({
-    queryKey: ['emails', 'list'],
-    queryFn: () => serverClient.request(GetEmailsDocument, { first: 20 }),
-  })
+await queryClient.prefetchQuery({
+  queryKey: ['emails', 'list'],
+  queryFn: () => gqlClient.request(GetEmailsDocument, { first: 20 }),
+})
 
-  return (
-    // HydrationBoundary passes prefetched data to the client
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <EmailsTable />  {/* Client Component — uses useGetEmailsQuery */}
-    </HydrationBoundary>
-  )
-}
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  </StrictMode>,
+)
 ```
+
+Most Vite apps can skip eager prefetch and let the generated hooks fetch when each route renders.
+If a separate Next.js App Router frontend is introduced, use a server-created `QueryClient` plus
+`dehydrate` / `HydrationBoundary`; treat that as framework-specific integration, not the default.
 
 ## Error handling
 
 ```typescript
-// GraphQL returns HTTP 200 even on errors → always inspect the errors field
+// Executed operations may return HTTP 200 with field errors; request/transport failures may not.
 import { GraphQLClient, ClientError } from 'graphql-request'
 
 async function safeRequest<T>(doc: string, variables: Record<string, unknown>): Promise<T | null> {
@@ -337,7 +337,8 @@ async function safeRequest<T>(doc: string, variables: Record<string, unknown>): 
     return data
   } catch (error) {
     if (error instanceof ClientError) {
-      // GraphQL errors (validation, permission, not found)
+      // Inspect both the HTTP response status and any GraphQL errors.
+      console.error('GraphQL HTTP status:', error.response.status)
       const gqlErrors = error.response.errors
       gqlErrors?.forEach(e => {
         console.error('GraphQL error:', e.message, e.extensions)
@@ -352,19 +353,18 @@ async function safeRequest<T>(doc: string, variables: Record<string, unknown>): 
 ## DevTools
 
 ```typescript
-// app/layout.tsx — add TanStack Query DevTools
+// AppProviders.tsx — add TanStack Query DevTools in Vite development mode
+import type { PropsWithChildren } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { queryClient } from './query-client'
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export function AppProviders({ children }: PropsWithChildren) {
   return (
-    <html>
-      <body>
-        {children}
-        {process.env.NODE_ENV === 'development' && (
-          <ReactQueryDevtools initialIsOpen={false} />
-        )}
-      </body>
-    </html>
+    <QueryClientProvider client={queryClient}>
+      {children}
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
   )
 }
 ```
@@ -376,7 +376,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 graphql-codegen:
   stage: build
   script:
-    - bun run codegen
+    - npm run codegen
     - git diff --exit-code src/generated/  # Fail on uncommitted generated changes
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -385,7 +385,7 @@ graphql-codegen:
 graphql-inspector:
   stage: test
   script:
-    - bunx @graphql-inspector/cli diff
+    - npx @graphql-inspector/cli diff
         $OLD_SCHEMA_URL
         $NEW_SCHEMA_URL
   allow_failure: false  # Breaking change = pipeline fail

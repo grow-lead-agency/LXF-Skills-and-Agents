@@ -34,6 +34,10 @@ Or manually — copy any `skills/<name>/` directory into your repo's `.claude/sk
 | `mysql-8-for-laravel` | Index design for Eloquent, JSON columns, migration locking on large tables, database-queue contention, pagination at scale |
 | `deployer-php` | Deployer v7 zero-downtime releases, Laravel shared dirs, migration safety, supervisor/opcache after symlink flip |
 | `ksef-e-invoicing` | Polish KSeF integration via ksef-php-client — lifecycle, signing, queue jobs, test environment (regulatory facts date-stamped with sources) |
+| `laravel-expression-language` | symfony/expression-language as a business-rule engine — rule persistence, safe function providers, validating untrusted expressions, caching, testing |
+| `laravel-file-transfer` | Feed/document transfer over SFTP (league/flysystem-sftp-v3) — streaming large files, atomic delivery, idempotent imports, queued jobs with locks |
+| `react-router-7` | Storefront routing — createBrowserRouter, nested layouts, loaders with AbortSignal, lazy routes, error boundaries, auth gating, memory-router tests |
+| `react-dnd` | Admin drag & drop — useDrag/useDrop, sortable reordering, optimistic persist to the API, custom drag layers, a11y limits and keyboard fallback |
 
 ### General stack skills
 
@@ -54,30 +58,39 @@ Or manually — copy any `skills/<name>/` directory into your repo's `.claude/sk
 | `docker` | Dockerfile authoring, compose v2, BuildKit, image optimization, security |
 | `terraform` | HCL patterns, state management, modules, CI/CD for infra |
 
-## Recommended companions (public, free)
+## Recommended companions
 
-- **Process skills** — [mattpocock/skills](https://github.com/mattpocock/skills): "Skills for Real Engineers" — alignment/grilling, spec-writing, TDD, code review. Stack-agnostic; pairs perfectly with this pack.
-- **Official examples** — [anthropics/skills](https://github.com/anthropics/skills): Anthropic's skill collection incl. `skill-creator` for writing your own.
-- **Discovery** — [skills.sh](https://skills.sh): community skill registry/leaderboard.
-
-## Live library docs — Context7 MCP (strongly recommended)
-
-Skills encode conventions; [Context7](https://context7.com) gives the agent **current
-version-accurate documentation** for Laravel, NestJS, Apollo, and every other library —
-so it stops guessing APIs from stale training data:
+This pack teaches **your stack**. Two other things are worth installing on day one — the
+**engineering process** skills that stop agent work failing for non-technical reasons, and
+**Context7** so the agent reads current API docs instead of guessing from memory:
 
 ```bash
-claude mcp add context7 -- npx -y @upstash/context7-mcp
+claude plugins install mattpocock-skills                 # process: grilling, TDD, code review, debugging
+claude mcp add context7 -- npx -y @upstash/context7-mcp  # live, version-accurate library docs
 ```
 
-Then the agent can resolve any library and query its docs mid-task.
+**[→ RESOURCES.md](RESOURCES.md)** — the curated list: which public skill collections are
+worth your time, which to ignore and why, where to browse for more, and how to write your
+own. Short on purpose.
+
+## Scope and honesty about it
+
+These skills were written from the platform's **stack documentation**, not from a reading
+of the source code. What that means in practice:
+
+- The **technical content** (framework APIs, patterns, gotchas, library behavior) is
+  verified against official documentation and is as accurate as the sources allow.
+- The **Project conventions** sections state assumptions about the repository layout.
+  Treat them as a starting point to verify, not as ground truth — Step 5 of
+  [AGENTS.md](AGENTS.md) walks an agent through calibrating them against the real code.
+
+They are ordinary Markdown files under MIT: correct them, extend them, delete what does
+not fit. A skill that matches your codebase beats a skill that matches the docs.
 
 ## Writing your own skills
 
-A skill is just a directory with a `SKILL.md` (frontmatter `name` + `description`, then
-instructions). Spec: [agentskills.io](https://agentskills.io). Rule of thumb: put the 80%
-path in SKILL.md (≤ ~400 lines), deep dives in `references/*.md`, and make the
-`description` contain the trigger phrases developers actually type.
+See [RESOURCES.md](RESOURCES.md#writing-your-own) — the short version: when you correct the
+agent about the same thing twice, that correction is a skill.
 
 ## License
 

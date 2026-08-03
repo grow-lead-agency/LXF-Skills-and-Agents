@@ -1,10 +1,10 @@
 // Standard test setup file
 // Copy to src/test/setup.ts
-// Dependencies: @testing-library/react, @testing-library/jest-dom, vitest, msw
+// Dependencies: @testing-library/react, @testing-library/jest-dom, vitest
 
 import '@testing-library/jest-dom'
 import { cleanup } from '@testing-library/react'
-import { afterEach, afterAll, beforeAll, vi } from 'vitest'
+import { afterEach } from 'vitest'
 
 // RTL: clean up DOM after each test
 afterEach(() => cleanup())
@@ -16,24 +16,5 @@ afterEach(() => cleanup())
 // afterEach(() => server.resetHandlers())
 // afterAll(() => server.close())
 
-// Sentry: silence in tests (spy instead of real calls)
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  init: vi.fn(),
-  setUser: vi.fn(),
-  withScope: vi.fn((cb) => cb({ setExtra: vi.fn(), setTag: vi.fn() })),
-}))
-
-// Next.js navigation: mock (common need in component tests)
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    back: vi.fn(),
-    refresh: vi.fn(),
-  }),
-  useSearchParams: () => new URLSearchParams(),
-  usePathname: () => '/',
-  redirect: vi.fn(),
-}))
+// Keep framework/service mocks local to the tests that need them. A global Sentry,
+// router, or GraphQL-client mock can hide integration errors in unrelated tests.

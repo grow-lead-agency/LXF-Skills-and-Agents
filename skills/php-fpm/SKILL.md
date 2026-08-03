@@ -169,9 +169,14 @@ rlimit_core = 0
 pm.status_path = /fpm-status
 ping.path = /fpm-ping
 ping.response = pong
+```
 
-; --- Graceful shutdown ---
-process_control_timeout = 60s         ; master waits for workers to finish after SIGTERM/SIGQUIT
+`process_control_timeout` is a global FPM directive, not a pool directive. Configure it
+in `/etc/php/8.4/fpm/php-fpm.conf` when the default is not appropriate:
+
+```ini
+; how long a child waits to react to a master control signal
+process_control_timeout = 60s
 ```
 
 Staging variant (dynamic):
@@ -444,8 +449,12 @@ Most common causes in a Laravel app:
   re-reads config, workers finish the current request, then restart. Clears OPcache.
 - **SIGQUIT** — graceful shutdown (workers finish current requests, then exit).
 - **SIGTERM** — fast shutdown.
-- `process_control_timeout = 60s` — how long the master waits for workers to finish
-  before force-killing them during reload/shutdown.
+- `process_control_timeout` — how long a child process may take to react to a control
+  signal from the master. It is not a request-drain or request-execution timeout.
+
+Request execution is bounded separately by `request_terminate_timeout`. Shutdown and
+service-manager drain limits belong in systemd/supervisor configuration and should be
+longer than the longest request you intentionally allow to finish.
 
 Rule of thumb: config changes and deploys use `reload`, never `restart`, unless you
 changed something only a full restart picks up (e.g. `opcache.preload`, extension
@@ -526,22 +535,24 @@ server {
     location ~ ^/index\.php(/|$) {
         fastcgi_pass php_fpm;
         include fastcgi_params;
-        ; IMPORTANT with symlinked releases: use $realpath_root, not $document_root
+        # IMPORTANT with symlinked releases: use $realpath_root, not $document_root
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         fastcgi_param DOCUMENT_ROOT $realpath_root;
         internal;
 
         fastcgi_buffering on;
-        fastcgi_read_timeout 60s;          ; must be >= request_terminate_timeout (FPM)
+        # Keep this >= request_terminate_timeout in the FPM pool.
+        fastcgi_read_timeout 60s;
         fastcgi_send_timeout 60s;
         fastcgi_connect_timeout 5s;
     }
 
     location ~ \.php$ {
-        return 404;                        ; block direct access to any other .php file
+        # Block direct access to every other PHP file.
+        return 404;
     }
 
-    ; --- FPM status + ping: localhost / monitoring only ---
+    # --- FPM status + ping: localhost / monitoring only ---
     location = /fpm-status {
         access_log off;
         allow 127.0.0.1;
@@ -605,11 +616,37 @@ want to detect a saturated pool quickly without paying the framework boot cost.
 
 ### 3. `opcache.max_accelerated_files` exhausted
 
-**Detection:**
-```bash
-php -r 'print_r(opcache_get_status(false)["opcache_statistics"]);'
-# compare num_cached_scripts vs max_cached_keys
+**Detection:** query the cache from code executed by the FPM SAPI. A CLI process has a
+separate cache (or none at all when `opcache.enable_cli=0`) and cannot inspect the FPM
+shared cache.
+
+Add a temporary Laravel route and restrict it to localhost at nginx before using it:
+
+```php
+use Illuminate\Support\Facades\Route;
+
+Route::get('/_ops/opcache', function () {
+    $status = opcache_get_status(false);
+    abort_if($status === false, 503, 'FPM OPcache is disabled');
+
+    return response()->json($status['opcache_statistics'] ?? []);
+});
 ```
+
+```nginx
+location = /_ops/opcache {
+    allow 127.0.0.1;
+    allow ::1;
+    deny all;
+    try_files $uri /index.php?$query_string;
+}
+```
+
+```bash
+curl --fail --silent http://127.0.0.1/_ops/opcache | jq '{num_cached_scripts, max_cached_keys}'
+```
+
+Remove the temporary route after diagnosis.
 
 **Action:** raise `opcache.max_accelerated_files` (e.g. to 30000). It only sizes a hash
 table — negligible memory cost. Note: with symlinked releases, old + new release files

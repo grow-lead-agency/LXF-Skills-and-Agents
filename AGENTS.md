@@ -83,7 +83,29 @@ the right mental model:
    zones) — fill it in, don't leave placeholders.
 4. Commit both files.
 
-## Step 5 — Final verification
+## Step 5 — Calibrate the skills against the real codebase
+
+These skills were written from the platform's stack documentation, not from a reading of
+the source. Every skill therefore ends with a **Project conventions** section stating
+assumptions — file paths, directory roles, naming, command names. Some of them will be
+slightly wrong for the codebase as it stands today, and a wrong convention is worse than
+a missing one, because the agent will follow it confidently.
+
+So calibrate once, in the platform repo:
+
+1. For each skill relevant to the area you work in, read its **Project conventions**
+   section and check each claim against the actual repository — do those paths exist, is
+   that really what lives in `app/Actions` vs `app/Services`, are those the real make
+   targets, is the queue really on the database driver in this environment?
+2. Where reality differs, **edit the skill** (skills are ordinary Markdown you own) or
+   record the correction in the platform repo's own `AGENTS.md`. The repo's `AGENTS.md`
+   wins over any skill — say so explicitly there if a skill is stale.
+3. Where the codebase has a convention no skill mentions and you keep correcting the
+   agent about it, add it — that repeated correction is exactly what a skill is for.
+
+Report which assumptions you checked and which you corrected.
+
+## Step 6 — Final verification
 
 Run through this checklist and show the results:
 
@@ -92,6 +114,7 @@ Run through this checklist and show the results:
 - [ ] Matt Pocock's skills installed; `/setup-matt-pocock-skills` completed in the platform repo
 - [ ] Context7 MCP responds
 - [ ] Platform repo has a filled-in `AGENTS.md` + thin `CLAUDE.md`, committed
+- [ ] Project-conventions assumptions calibrated against the real codebase (Step 5)
 
 ---
 

@@ -163,7 +163,7 @@ invoice XML — invoices are not signed, only the auth request is.
 ```php
 class SendInvoiceToKsef implements ShouldQueue
 {
-    use Queueable, InteractsWithQueue, Dispatchable, SerializesModels;
+    use Queueable; // Laravel 11 single trait — bundles Dispatchable, InteractsWithQueue, SerializesModels
 
     public int $tries = 5;
     public function backoff(): array { return [60, 300, 900, 3600]; }

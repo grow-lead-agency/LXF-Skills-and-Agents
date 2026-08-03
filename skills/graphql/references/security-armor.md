@@ -127,7 +127,7 @@ Prefer an explicit `GRAPHQL_INTROSPECTION=false` env in production rather than o
 ## GraphQL Armor (recommended for Apollo / Yoga)
 
 ```bash
-bun add @escape.tech/graphql-armor
+npm install @escape.tech/graphql-armor
 ```
 
 ```typescript

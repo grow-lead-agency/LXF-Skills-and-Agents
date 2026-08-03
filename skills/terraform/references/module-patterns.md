@@ -91,22 +91,15 @@ resource "hcloud_server" "main" {
   ssh_keys    = var.ssh_key_ids
   labels      = local.common_labels
 
-  dynamic "firewall_ids" {
-    for_each = var.firewall_ids
-    content {
-      # Note: hcloud_server has no firewall_ids block — attach via a separate resource
-    }
-  }
-
   lifecycle {
     ignore_changes = [user_data]
   }
 }
 
 resource "hcloud_server_firewall" "main" {
-  count       = length(var.firewall_ids) > 0 ? 1 : 0
+  for_each    = toset(var.firewall_ids)
   server_id   = hcloud_server.main.id
-  firewall_id = var.firewall_ids[count.index]  # first only — use for_each for multiple
+  firewall_id = each.value
 }
 ```
 

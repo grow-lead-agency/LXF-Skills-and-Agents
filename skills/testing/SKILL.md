@@ -1,20 +1,15 @@
 ---
 name: testing
-description: |
-  Pre-deploy quality assurance skill. Enforces comprehensive testing BEFORE deployment.
-  Sits between development and deployment. Covers the full test pyramid: unit, integration,
-  E2E (Playwright 1.58+), error handling verification, Sentry smoke tests, and observability
-  gates. Vitest 4.x with stable Browser Mode, built-in visual regression (toMatchScreenshot),
-  Playwright AI Test Agents (Planner/Generator/Healer), accessibility-tree-first selectors.
-  Prevents the most common production bugs: API errors that fail silently, toast errors
-  without messages, missing Sentry events, broken error boundaries, no health endpoint.
-  Use when: a feature is coded, tests need writing, pre-deploy QA, CI failing,
-  error handling review, Sentry not capturing, health check missing.
-  Triggers: testing, tests, QA, quality, pre-deploy, quality gates, coverage,
-  vitest, playwright, error boundary, toast error, Sentry smoke, health check,
-  test pyramid, RTL, @testing-library, error handling, unit test, integration test,
-  E2E, npm test, tsc noEmit, lint, before deploy, regression test,
-  browser mode, visual regression, toMatchScreenshot, playwright agents.
+description: >-
+  Pre-deploy quality assurance for Laravel 11/PHPUnit 11, NestJS/Jest, and React/Vite
+  with Vitest and Playwright. Use after implementation, for regression tests, CI failures,
+  coverage work, error-path review, health checks, Sentry smoke tests, and release gates.
+  Covers unit, integration, MySQL-backed feature tests, GraphQL resolver tests, React
+  component tests, E2E journeys, observability checks, Vitest Browser Mode and visual
+  regression, and Playwright test agents. Triggers: testing, tests, QA, quality gate,
+  pre-deploy, PHPUnit, Jest, Vitest, Playwright, coverage, regression test, error boundary,
+  toast error, Sentry smoke, health endpoint, test pyramid, Testing Library, E2E, npm test,
+  tsc noEmit, lint, before deploy, browser mode, toMatchScreenshot.
 ---
 
 # Pre-Deploy Testing
@@ -24,10 +19,10 @@ has a test here that would have caught it.
 
 **Workflow chain:** development → **`testing`** → deployment
 
-**Stack context:** Laravel 11 backend (PHPUnit/Pest), NestJS GraphQL BFF (Jest 30),
+**Stack context:** Laravel 11 backend (PHPUnit 11), NestJS GraphQL BFF (Jest 30),
 React admin (Vitest 4 + Testing Library), React storefront (Vitest 4), Playwright for E2E.
-This skill focuses on the JavaScript/TypeScript layers; backend tests follow the same
-pyramid principles with their native runners.
+Treat the Laravel, BFF, frontend, and E2E suites as one release gate even when they live
+in separate workspaces.
 
 ---
 
@@ -100,7 +95,7 @@ Key improvements to leverage in test implementation:
 ### Migration: Vitest 3 → 4
 ```bash
 # Update + install browser provider
-npm install -D vitest@latest @vitest/browser-playwright
+npm install -D vitest@latest @vitest/browser-playwright @vitest/coverage-v8
 ```
 See https://vitest.dev/guide/migration for full guide.
 
@@ -141,8 +136,11 @@ Prefer `getByRole()`, `getByLabel()` over CSS selectors — accessibility-tree-f
 ### File locations (convention)
 
 ```
-src/features/<module>/__tests__/   # Unit + integration (co-located)
-src/test/mocks/                    # API client mocks, MSW handlers
+tests/Feature/                     # Laravel HTTP, policy, and MySQL-backed feature tests
+tests/Unit/                        # Laravel unit tests
+bff/src/**/__tests__/              # NestJS resolver/service tests (Jest)
+frontend/src/**/__tests__/         # React unit + integration tests (Vitest)
+frontend/src/test/mocks/           # API client mocks and MSW handlers
 e2e/                               # Playwright specs + page objects
 ```
 
@@ -301,7 +299,7 @@ Enhanced quality job: copy `assets/github-actions-quality.yml` into your CI work
 Additions over a baseline deploy pipeline:
 - Separate steps for tsc, lint, test (easier failure diagnosis)
 - Conditional E2E step (only if Playwright config exists)
-- `--reporter=github` for inline PR annotations
+- Vitest `github-actions` reporter for inline PR annotations
 
 ---
 

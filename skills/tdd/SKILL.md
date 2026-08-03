@@ -1,7 +1,7 @@
 ---
 name: tdd
 description: >-
-  Test-driven development discipline — the red → green loop and what makes tests
+  Test-driven development discipline — the red → green → refactor loop and what makes tests
   worth keeping: what a good test is, SEAMS (where you test, agreed up front),
   anti-patterns (implementation-coupled, tautological tests, horizontal slicing),
   and rules of the loop. Vertical slices / tracer bullets instead of "all tests
@@ -17,7 +17,7 @@ description: >-
 
 # Test-Driven Development
 
-TDD is the red → green loop. This skill is the reference that makes that loop produce tests worth
+TDD is the red → green → refactor loop. This skill is the reference that makes that loop produce tests worth
 keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every
 section applies on every cycle — consult them before and during the loop, not after.
 
@@ -67,8 +67,9 @@ Ask: "What's the public interface, and which seams should we test?"
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't
   anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
-- **Refactoring is not part of the loop.** It belongs to the review stage (code review), not the
-  red → green implementation cycle.
+- **Refactor while green.** Once the new behavior passes, improve names, duplication, and
+  structure without changing behavior. Keep running the tests; if they turn red, undo or fix
+  the refactor before beginning the next failing test.
 
 ## Relationship to other testing skills
 

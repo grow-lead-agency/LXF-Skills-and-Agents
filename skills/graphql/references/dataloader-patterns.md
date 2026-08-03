@@ -60,8 +60,7 @@ one query or one HTTP call.
 ### NestJS + `dataloader` (Apollo Server 5)
 
 ```bash
-bun add dataloader
-# or: npm install dataloader
+npm install dataloader
 ```
 
 ```typescript
@@ -116,17 +115,30 @@ Create DataLoaders per GraphQL request (never as a process-wide singleton — th
 data across users):
 
 ```typescript
-// context factory (Apollo Server / NestJS GraphQLModule)
-context: ({ req }) => ({
-  req,
-  loaders: {
+// graphql.module.ts — the factory closes over an explicitly injected dependency
+function createLoaders(templateService: TemplateService) {
+  return {
     template: new TemplateDataLoader(templateService),
     // ...other loaders
-  },
+  }
+}
+
+GraphQLModule.forRootAsync<ApolloDriverConfig>({
+  driver: ApolloDriver,
+  imports: [TemplateModule], // TemplateModule must export TemplateService
+  inject: [TemplateService],
+  useFactory: (templateService: TemplateService) => ({
+    context: ({ req }) => ({
+      req,
+      loaders: createLoaders(templateService), // new loader instances for this request
+    }),
+  }),
 })
 ```
 
-Or inject request-scoped Nest providers (`Scope.REQUEST`) as shown above.
+Alternatively, resolve the request-scoped `TemplateDataLoader` provider from the Nest request
+context. In either form, every constructor dependency is explicit and each GraphQL request gets
+its own loader cache.
 
 ## Solution 3: Max depth limits (prevention, not a fix)
 

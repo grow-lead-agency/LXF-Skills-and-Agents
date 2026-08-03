@@ -187,7 +187,7 @@ import {
 }
 
 import {
-  to = cloudflare_record.www
+  to = cloudflare_dns_record.www
   id = "zone_id/record_id"  # Cloudflare composite ID
 }
 
@@ -208,7 +208,7 @@ tofu plan -generate-config-out=generated.tf
 ```bash
 # terraform import <resource_address> <provider_id>
 tofu import hcloud_server.web 12345678
-tofu import 'cloudflare_record.www' "zone_id/record_id"
+tofu import 'cloudflare_dns_record.www' "zone_id/record_id"
 tofu import 'hcloud_server.servers["web-1"]' 12345678
 tofu import 'module.web.hcloud_server.main' 12345678
 

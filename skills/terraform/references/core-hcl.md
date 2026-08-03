@@ -14,7 +14,7 @@ terraform {
     }
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = ">= 4.44, < 5.0"
+      version = "~> 5.0"
     }
   }
 }
@@ -393,7 +393,9 @@ data "digitalocean_image" "ubuntu" {
 }
 
 data "cloudflare_zone" "main" {
-  name = "example.com"
+  filter = {
+    name = "example.com"
+  }
 }
 
 # Usage in a resource

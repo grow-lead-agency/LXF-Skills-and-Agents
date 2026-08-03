@@ -172,12 +172,10 @@ terraform {
     }
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.44"
+      version = "~> 5.0"
     }
   }
-  backend "pg" {
-    conn_str = var.pg_conn_str   # or S3
-  }
+  backend "pg" {}               # partial config; supply credentials during init
 }
 
 provider "digitalocean" {
@@ -207,6 +205,19 @@ resource "cloudflare_dns_record" "web" {   # v5: cloudflare_record → cloudflar
   ttl     = 1                                # v5: number, 1 = auto (required when proxied)
   proxied = true
 }
+```
+
+Backend blocks are initialized before normal input variables, so `var.*` is not available there.
+Keep the connection string in a local, secret-managed file that is excluded from Git, then pass it
+explicitly during initialization:
+
+```hcl
+# backend.pg.hcl — do not commit
+conn_str = "postgres://terraform:secret@state-db.example.com/terraform_state"
+```
+
+```bash
+terraform init -backend-config=backend.pg.hcl
 ```
 
 > **Cloudflare provider v5** has breaking changes vs v4 — `cloudflare_dns_record`,

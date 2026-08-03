@@ -1,25 +1,25 @@
 # Docker Troubleshooting Guide
 
 ## Table of Contents
-1. [Container Won't Start](#wont-start)
-2. [Build Cache Issues](#build-cache)
-3. [Layer Debugging](#layer-debug)
-4. [Networking Problems](#networking)
-5. [Permission Errors](#permissions)
-6. [OOM Kills](#oom)
-7. [Graceful Shutdown Issues](#shutdown)
-8. [Dev Container Issues](#devcontainer)
-9. [Registry / Pull Issues](#registry)
-10. [Performance Diagnostics](#performance)
-11. [Useful Debug Commands](#commands)
-12. [docker debug — Slim & Distroless Containers](#docker-debug)
-13. [docker events — Real-Time Daemon Stream](#events)
-14. [docker inspect — Crash Forensics](#inspect-forensics)
-15. [containerd Image Store --load Gotcha](#containerd-store)
+1. [Container Won't Start](#container-wont-start)
+2. [Build Cache Issues](#build-cache-issues)
+3. [Layer Debugging](#layer-debugging)
+4. [Networking Problems](#networking-problems)
+5. [Permission Errors](#permission-errors)
+6. [OOM Kills](#oom-kills)
+7. [Graceful Shutdown Issues](#graceful-shutdown-issues)
+8. [Dev Container Issues](#dev-container-issues)
+9. [Registry and Pull Issues](#registry-and-pull-issues)
+10. [Performance Diagnostics](#performance-diagnostics)
+11. [Useful Debug Commands](#useful-debug-commands)
+12. [docker debug for Slim and Distroless Containers](#docker-debug-for-slim-and-distroless-containers)
+13. [docker events Real-Time Daemon Event Stream](#docker-events-real-time-daemon-event-stream)
+14. [docker inspect Crash Forensics](#docker-inspect-crash-forensics)
+15. [containerd Image Store Load Gotcha](#containerd-image-store-load-gotcha)
 
 ---
 
-## Container Won't Start {#wont-start}
+## Container Won't Start
 
 ### Check exit code
 
@@ -88,7 +88,7 @@ docker run -it --rm --user root myapp:latest sh
 
 ---
 
-## Build Cache Issues {#build-cache}
+## Build Cache Issues
 
 ### Cache is not being used
 
@@ -150,7 +150,7 @@ docker system prune -a --volumes
 
 ---
 
-## Layer Debugging {#layer-debug}
+## Layer Debugging
 
 ### What's in each layer?
 
@@ -201,7 +201,7 @@ du -sh /app/* | sort -h
 
 ---
 
-## Networking Problems {#networking}
+## Networking Problems
 
 ### Container can't reach another container
 
@@ -270,7 +270,7 @@ extra_hosts:
 
 ---
 
-## Permission Errors {#permissions}
+## Permission Errors
 
 ### Can't write to mounted directory
 
@@ -323,7 +323,7 @@ docker build --secret id=api_key,src=./api_key .
 
 ---
 
-## OOM Kills {#oom}
+## OOM Kills
 
 Container killed unexpectedly = usually OOM (Out of Memory).
 
@@ -362,7 +362,7 @@ CMD ["node", "--max-old-space-size=768", "dist/index.js"]
 
 ---
 
-## Graceful Shutdown Issues {#shutdown}
+## Graceful Shutdown Issues
 
 App takes 10+ seconds to stop = SIGTERM not being handled.
 
@@ -426,7 +426,7 @@ CMD ["node", "dist/index.js"]
 
 ---
 
-## Dev Container Issues {#devcontainer}
+## Dev Container Issues
 
 ### Hot reload not working with bind mounts
 
@@ -473,7 +473,7 @@ shadow the Linux modules installed in the container → native addons crash.
 
 ---
 
-## Registry / Pull Issues {#registry}
+## Registry and Pull Issues
 
 ### Can't push/pull from GHCR
 
@@ -519,7 +519,7 @@ docker login
 
 ---
 
-## Performance Diagnostics {#performance}
+## Performance Diagnostics
 
 ### Slow builds
 
@@ -567,7 +567,7 @@ docker exec mycontainer sh -c "top -b -n1 | head -20"
 
 ---
 
-## Useful Debug Commands {#commands}
+## Useful Debug Commands
 
 ```bash
 # System-wide info
@@ -611,7 +611,7 @@ docker builder prune      # clear build cache
 
 ---
 
-## docker debug — Slim & Distroless Containers {#docker-debug}
+## docker debug for Slim and Distroless Containers
 
 **THE answer to "distroless / scratch / slim image has no shell, how do I debug it?"**
 
@@ -693,7 +693,7 @@ separate `:debug` image variant or a baked-in busybox just to investigate.
 `docker debug` is a **Docker Desktop** feature and requires a paid subscription —
 **Pro, Team, or Business** (it is not part of Docker Personal/free). It ships with the
 Docker Desktop CLI; no separate install. On a license without it, fall back to the
-distroless `:debug` image variants (see [Container Won't Start](#wont-start)).
+distroless `:debug` image variants (see [Container Won't Start](#container-wont-start)).
 
 > Note: changes made while debugging an **image or stopped container** are discarded on exit.
 > When you debug a **running/paused** container, filesystem changes ARE visible to that
@@ -701,7 +701,7 @@ distroless `:debug` image variants (see [Container Won't Start](#wont-start)).
 
 ---
 
-## docker events — Real-Time Daemon Event Stream {#events}
+## docker events Real-Time Daemon Event Stream
 
 When a container restarts or dies "mysteriously", `docker events` shows you exactly what the
 **daemon** saw and when — the missing half of the picture that `docker logs` (app stdout)
@@ -731,7 +731,7 @@ Sample output correlating an OOM kill with the restart that followed:
 ```
 
 `oom` immediately before `die` with `exitCode=137` = the kernel OOM-killed it, then the
-restart policy bounced it. See [OOM Kills](#oom) for the fix.
+restart policy bounced it. See [OOM Kills](#oom-kills) for the fix.
 
 ### Post-mortem with --since / --until
 
@@ -754,11 +754,11 @@ Useful event types to filter on: `die`, `oom`, `kill`, `restart`, `health_status
 
 ---
 
-## docker inspect — Crash Forensics {#inspect-forensics}
+## docker inspect Crash Forensics
 
 `docker inspect` carries the full post-crash state. These are the **specific fields** that
 answer the common "why did it die?" questions (basic `inspect` usage is in
-[Container Won't Start](#wont-start); this is the crash-forensics cheat sheet).
+[Container Won't Start](#container-wont-start); this is the crash-forensics cheat sheet).
 
 ### Exit code decoder
 
@@ -772,7 +772,7 @@ docker inspect --format='{{.State.ExitCode}}' my-app
 | `1` | Generic application error |
 | `137` | `128 + 9` = **SIGKILL** — almost always **OOM** (cross-check `.State.OOMKilled`) or `docker kill` |
 | `139` | `128 + 11` = **SIGSEGV** — segfault (native addon, corrupt binary, bad arch) |
-| `143` | `128 + 15` = **SIGTERM** — graceful stop signal received (see [Graceful Shutdown](#shutdown)) |
+| `143` | `128 + 15` = **SIGTERM** — graceful stop signal received (see [Graceful Shutdown](#graceful-shutdown-issues)) |
 | `125` | Docker daemon failed to run the container |
 | `126` / `127` | Command not executable / not found |
 
@@ -816,15 +816,15 @@ docker inspect --format='{{json .State.Health}}' "$C" 2>/dev/null | jq '.Log[-1]
 ```
 
 Reading the result:
-- `OOMKilled: true` → memory limit too low → [OOM Kills](#oom).
+- `OOMKilled: true` → memory limit too low → [OOM Kills](#oom-kills).
 - `ExitCode: 143` + low `RestartCount` → clean SIGTERM, not a bug.
 - `ExitCode: 137` + `OOMKilled: false` → killed by `docker kill` / `docker stop` timeout, not memory.
-- `ExitCode: 139` → segfault — usually a native module built for the wrong arch (cross-ref [containerd store](#containerd-store) / platform mismatch).
+- `ExitCode: 139` → segfault — usually a native module built for the wrong arch (cross-ref [containerd store](#containerd-image-store-load-gotcha) / platform mismatch).
 - High `RestartCount` climbing → crash loop; pair with `docker events` to time it.
 
 ---
 
-## containerd Image Store --load Gotcha {#containerd-store}
+## containerd Image Store Load Gotcha
 
 **Symptom:** a multi-platform build that works with `--push` **fails** with `--load`:
 
@@ -899,4 +899,3 @@ build workflow, and [daemon-server-ops.md](daemon-server-ops.md) for `daemon.jso
 - https://docs.docker.com/reference/cli/docker/debug/
 - https://docs.docker.com/build/building/multi-platform/
 - https://docs.docker.com/desktop/features/containerd/
-

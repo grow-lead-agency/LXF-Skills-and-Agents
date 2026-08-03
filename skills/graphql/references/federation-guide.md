@@ -168,7 +168,7 @@ subgraphs:
 NestJS code-first GraphQL with the Apollo Federation driver:
 
 ```bash
-bun add @nestjs/graphql @nestjs/apollo @apollo/subgraph graphql
+npm install @nestjs/graphql @nestjs/apollo @apollo/subgraph graphql
 ```
 
 ```typescript
@@ -221,7 +221,7 @@ when multiple teams own subgraphs and need independent schema deploys.
 
 1. **Add Federation dependencies to each subgraph service**
    ```bash
-   bun add @nestjs/graphql @nestjs/apollo @apollo/subgraph
+   npm install @nestjs/graphql @nestjs/apollo @apollo/subgraph
    ```
 
 2. **Add @key directives on shared entities**

@@ -98,7 +98,7 @@ vendor/bin/phpstan analyse --no-progress --error-format=github
 
 ---
 
-## 2. Rule levels (0-10, plus bleeding edge level 11)
+## 2. Rule levels (0-10, with bleeding edge rules kept separate)
 
 | Level | Checks added at this level, cumulatively |
 |-------|------------------------------------------|
@@ -113,7 +113,16 @@ vendor/bin/phpstan analyse --no-progress --error-format=github
 | **8** | Reports calling methods and accessing properties on nullable types |
 | **9** | Be strict about `mixed`; only passing it to another `mixed` parameter or narrowing it with checks such as `instanceof` is allowed |
 | **10** | (PHPStan 2.0) Even stricter about mixed — implicit mixed (missing typehint) reported |
-| **11** | (Bleeding edge) Preview next major |
+
+Bleeding edge is not a numeric level. Opt into PHPStan's preview rules independently
+of `parameters.level`:
+
+```yaml
+includes:
+    - phar://phpstan.phar/conf/bleedingEdge.neon
+parameters:
+    level: 10
+```
 
 **Strategy:**
 - **Legacy codebase** — start at level 0, generate a baseline, and increment the level gradually
@@ -315,8 +324,6 @@ parameters:
         - vendor/larastan/larastan/bootstrap.php
 
     # Explicit checks retained while the project climbs through lower levels
-    checkGenericClassInNonGenericObjectType: true
-    checkMissingIterableValueType: true
     checkUninitializedProperties: true
 
     # Strict analysis extras
@@ -355,8 +362,6 @@ parameters:
         - vendor/larastan/larastan/bootstrap.php
 
     # Strict analysis: enable all relevant checks
-    checkGenericClassInNonGenericObjectType: true
-    checkMissingIterableValueType: true
     checkUninitializedProperties: true
     checkBenevolentUnionTypes: true
     checkMissingOverrideMethodAttribute: true
@@ -487,6 +492,7 @@ namespace Tests\PhpStan\Rules;
 use Illuminate\Database\Eloquent\Model;
 use PhpParser\Node;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Identifier;
 use PHPStan\Analyser\Scope;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -506,6 +512,11 @@ class NoDirectEloquentWriteInControllerRule implements Rule
     {
         $class = $scope->getClassReflection();
         if ($class === null || !str_ends_with($class->getName(), 'Controller')) {
+            return [];
+        }
+
+        // Dynamic calls such as $model->{$method}() have an expression as the name.
+        if (!$node->name instanceof Identifier) {
             return [];
         }
 
@@ -668,7 +679,9 @@ jobs:
 # .gitlab-ci.yml
 phpstan:
   stage: quality
-  image: php:8.4-cli
+  # Composer is available in this image. If the application needs PHP extensions
+  # beyond this image, use a project CI image that bundles PHP 8.4 + Composer.
+  image: composer:2
   before_script:
     - composer install --no-interaction --prefer-dist --no-progress
     - php artisan optimize:clear
@@ -761,14 +774,19 @@ vendor/bin/phpstan analyse
 
 **Anti-pattern:** regenerating the baseline for every new error. Fix new errors instead and reserve the baseline for existing legacy debt.
 
-CI check against baseline expansion:
+CI check against baseline changes relative to the target branch. This catches a
+committed baseline expansion; running `phpstan analyse` alone does not rewrite the file:
 
 ```yaml
 # .gitlab-ci.yml
 phpstan-baseline-check:
+  variables:
+    GIT_DEPTH: "0"
   script:
     - vendor/bin/phpstan analyse
-    - git diff --quiet phpstan-baseline.neon || (echo "Baseline expanded — fix errors instead" && exit 1)
+    - git fetch origin "$CI_DEFAULT_BRANCH"
+    - BASE_SHA="$(git merge-base HEAD "origin/$CI_DEFAULT_BRANCH")"
+    - git diff --exit-code "$BASE_SHA" -- phpstan-baseline.neon || (echo "Baseline changed — fix new errors or review the baseline change explicitly" && exit 1)
 ```
 
 ### G6: "Memory limit exhausted"
@@ -834,8 +852,8 @@ vendor/bin/phpstan analyse --generate-baseline --allow-empty-baseline
 # Clear cache
 vendor/bin/phpstan clear-result-cache
 
-# Dump types (debugging)
-\PHPStan\dumpType($variable);  // In analyzed code; it has no runtime effect
+# Dump types (analysis-only debugging)
+\PHPStan\dumpType($variable);  // Remove before executing this code; the helper may not exist at runtime
 
 # Inline ignore
 // @phpstan-ignore-next-line

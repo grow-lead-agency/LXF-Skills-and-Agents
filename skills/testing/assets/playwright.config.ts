@@ -1,5 +1,5 @@
-// Playwright config for Next.js + Supabase projects
-// Copy to project root as playwright.config.ts
+// Playwright config for a React + Vite frontend backed by the GraphQL BFF
+// Copy to the frontend workspace or repository root as playwright.config.ts
 // Dependencies: @playwright/test
 // Setup: npx playwright install --with-deps chromium
 
@@ -14,26 +14,18 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'html',
 
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.BASE_URL || 'http://127.0.0.1:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
 
   projects: [
-    // Auth setup — runs first, saves session state
-    {
-      name: 'setup',
-      testMatch: /.*\.setup\.ts/,
-    },
-
     // Desktop Chrome
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        storageState: 'e2e/.auth/user.json',
       },
-      dependencies: ['setup'],
     },
 
     // Mobile viewport
@@ -41,16 +33,14 @@ export default defineConfig({
       name: 'mobile',
       use: {
         ...devices['Pixel 7'],
-        storageState: 'e2e/.auth/user.json',
       },
-      dependencies: ['setup'],
     },
   ],
 
   // Dev server — start automatically if not running
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: 'npm run dev -- --host 127.0.0.1',
+    url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

@@ -258,3 +258,12 @@ export default function ImportStatus({ userId }) {
 Debugging aids: Pusher dashboard → Debug Console shows every message reaching
 Pusher (separates server-side vs client-side problems); `pusher-js` verbose
 logging via `Pusher.logToConsole = true;` in dev.
+
+## Sources
+
+- Laravel 11 broadcasting — https://laravel.com/docs/11.x/broadcasting
+- Laravel events — https://laravel.com/docs/11.x/events
+- Laravel Echo — https://laravel.com/docs/11.x/broadcasting#client-side-installation
+- Pusher Channels docs — https://pusher.com/docs/channels/
+- pusher-js client library — https://github.com/pusher/pusher-js
+- pusher-http-php server library — https://github.com/pusher/pusher-http-php

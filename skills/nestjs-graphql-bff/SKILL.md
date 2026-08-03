@@ -124,7 +124,9 @@ export class Product {
 ### Resolvers, args, input types
 
 ```ts
-import { Args, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
+import {
+  Args, Context, InputType, Int, Mutation, Query, Resolver,
+} from '@nestjs/graphql';
 
 @Resolver(() => Product)
 export class CatalogResolver {

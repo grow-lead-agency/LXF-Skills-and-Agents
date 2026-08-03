@@ -1,21 +1,21 @@
 # Dockerfile Best Practices + Language Templates
 
 ## Table of Contents
-1. [Instruction Order (Cache Optimization)](#instruction-order)
-2. [Multi-stage Build Anatomy](#multi-stage)
-3. [Node.js Templates](#nodejs)
-4. [Python Template](#python)
-5. [Go Template](#go)
-6. [Rust Template](#rust)
-7. [ENTRYPOINT vs CMD](#entrypoint-cmd)
-8. [ARG vs ENV](#arg-env)
+1. [Instruction Order (Cache Optimization)](#instruction-order-cache-optimization)
+2. [Multi-stage Build Anatomy](#multi-stage-build-anatomy)
+3. [Node.js Templates](#nodejs-templates)
+4. [Python Template](#python-template)
+5. [Go Template](#go-template)
+6. [Rust Template](#rust-template)
+7. [ENTRYPOINT vs CMD](#entrypoint-vs-cmd)
+8. [ARG vs ENV](#arg-vs-env)
 9. [HEALTHCHECK](#healthcheck)
-10. [COPY vs ADD](#copy-add)
-11. [Shell vs Exec Form](#shell-exec)
+10. [COPY vs ADD](#copy-vs-add)
+11. [Shell vs Exec Form](#shell-vs-exec-form)
 
 ---
 
-## Instruction Order (Cache Optimization) {#instruction-order}
+## Instruction Order (Cache Optimization)
 
 Docker rebuilds from the first changed layer downward. Wrong order = slow CI.
 
@@ -41,7 +41,7 @@ COPY . .
 
 ---
 
-## Multi-stage Build Anatomy {#multi-stage}
+## Multi-stage Build Anatomy
 
 ```dockerfile
 # syntax=docker/dockerfile:1
@@ -49,10 +49,13 @@ COPY . .
 
 # Stage names must be lowercase
 FROM node:22-alpine AS deps
-# deps stage: install production deps only
+# deps stage: install all locked dependencies needed by build and test stages
 
 FROM node:22-alpine AS builder
 # builder stage: compile, transpile, build
+
+FROM deps AS prod-deps
+# prod-deps stage: prune devDependencies after the build dependency graph is available
 
 FROM node:22-alpine AS runner
 # runner stage: minimal runtime image
@@ -69,7 +72,7 @@ COPY --from=builder /app/dist ./dist
 
 ---
 
-## Node.js Templates {#nodejs}
+## Node.js Templates
 
 ### Node.js Production (recommended)
 
@@ -83,7 +86,7 @@ COPY package.json package-lock.json ./
 
 # Cache mount: npm cache persists between builds
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev
+    npm ci
 
 # ─────────────────────────────────────────────
 FROM node:22-alpine AS builder
@@ -96,6 +99,12 @@ COPY . .
 RUN npm run build
 
 # ─────────────────────────────────────────────
+FROM deps AS prod-deps
+
+# Build tools stay in deps/builder; runtime node_modules contains production packages only
+RUN npm prune --omit=dev
+
+# ─────────────────────────────────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -105,7 +114,7 @@ RUN addgroup -g 1001 -S appuser && \
 
 # Copy only what runtime needs
 COPY --from=builder --chown=appuser:appuser /app/dist ./dist
-COPY --from=deps --chown=appuser:appuser /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=appuser:appuser /app/node_modules ./node_modules
 # If you have static assets:
 # COPY --from=builder --chown=appuser:appuser /app/public ./public
 
@@ -163,7 +172,7 @@ output: 'standalone'
 
 ---
 
-## Python Template {#python}
+## Python Template
 
 ```dockerfile
 # syntax=docker/dockerfile:1
@@ -204,7 +213,7 @@ CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000
 
 ---
 
-## Go Template {#go}
+## Go Template
 
 Go produces a single static binary — perfect for minimal images.
 
@@ -242,7 +251,7 @@ If you need a shell for debugging, use `gcr.io/distroless/static-debian12` inste
 
 ---
 
-## Rust Template {#rust}
+## Rust Template
 
 ```dockerfile
 # syntax=docker/dockerfile:1
@@ -280,7 +289,7 @@ CMD ["/app"]
 
 ---
 
-## ENTRYPOINT vs CMD {#entrypoint-cmd}
+## ENTRYPOINT vs CMD
 
 | | ENTRYPOINT | CMD |
 |-|-----------|-----|
@@ -322,7 +331,7 @@ Shell form wraps in `/bin/sh -c` which doesn't receive SIGTERM.
 
 ---
 
-## ARG vs ENV {#arg-env}
+## ARG vs ENV
 
 ```dockerfile
 # ARG: build-time only, not in final image
@@ -345,7 +354,7 @@ image metadata. Use `--mount=type=secret` instead (see buildkit-multiplatform.md
 
 ---
 
-## HEALTHCHECK {#healthcheck}
+## HEALTHCHECK
 
 ```dockerfile
 # Syntax
@@ -378,7 +387,7 @@ gets marked unhealthy before it's done starting. Set to 2x your average startup 
 
 ---
 
-## COPY vs ADD {#copy-add}
+## COPY vs ADD
 
 Use COPY always. ADD only for:
 - Auto-extracting tar archives: `ADD app.tar.gz /app/`
@@ -401,7 +410,7 @@ RUN curl -fsSL https://example.com/config.json -o config.json
 
 ---
 
-## Shell vs Exec Form {#shell-exec}
+## Shell vs Exec Form
 
 ```dockerfile
 # Shell form (BAD for CMD/ENTRYPOINT) — runs as /bin/sh -c "..."

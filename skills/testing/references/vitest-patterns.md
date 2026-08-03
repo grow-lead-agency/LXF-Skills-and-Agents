@@ -6,7 +6,7 @@
 
 ## Vitest Config (React + Vite)
 
-Use `assets/vitest.config.react.ts` as template. Key settings:
+Use the [React + Vite config template](../assets/vitest.config.react.ts). Key settings:
 
 ```typescript
 // vitest.config.ts
@@ -118,9 +118,16 @@ Mock the client module, test the function directly — no HTTP mocking needed.
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createBooking } from '../services/create-booking'
-import { createMockApiClient } from '@/test/mocks/api-client'
+const { mockApi } = vi.hoisted(() => ({
+  mockApi: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+}))
 
-const mockApi = createMockApiClient()
 vi.mock('@/lib/api-client', () => ({
   getApiClient: () => mockApi,
 }))

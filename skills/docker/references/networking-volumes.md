@@ -1,20 +1,20 @@
 # Docker Networking + Volume Strategies
 
 ## Table of Contents
-1. [Network Drivers Overview](#drivers)
-2. [Bridge Networks](#bridge)
-3. [Host Network](#host)
-4. [Overlay Networks (Swarm)](#overlay)
-5. [Macvlan / IPvlan](#macvlan)
-6. [DNS and Container Discovery](#dns)
-7. [Port Mapping Strategies](#ports)
-8. [Volume Types](#volumes)
-9. [Volume Patterns by Use Case](#patterns)
-10. [Backup and Restore Volumes](#backup)
+1. [Network Drivers Overview](#network-drivers-overview)
+2. [Bridge Networks](#bridge-networks)
+3. [Host Network](#host-network)
+4. [Overlay Networks (Swarm)](#overlay-networks-swarm)
+5. [Macvlan and IPvlan](#macvlan-and-ipvlan)
+6. [DNS and Container Discovery](#dns-and-container-discovery)
+7. [Port Mapping Strategies](#port-mapping-strategies)
+8. [Volume Types](#volume-types)
+9. [Volume Patterns by Use Case](#volume-patterns-by-use-case)
+10. [Backup and Restore Volumes](#backup-and-restore-volumes)
 
 ---
 
-## Network Drivers Overview {#drivers}
+## Network Drivers Overview
 
 | Driver | When to use |
 |--------|------------|
@@ -27,7 +27,7 @@
 
 ---
 
-## Bridge Networks {#bridge}
+## Bridge Networks
 
 Default bridge vs user-defined bridge:
 
@@ -116,7 +116,7 @@ networks:
 
 ---
 
-## Host Network {#host}
+## Host Network
 
 Container shares the host's network stack — no network isolation, best performance.
 
@@ -145,7 +145,7 @@ services:
 
 ---
 
-## Overlay Networks (Swarm) {#overlay}
+## Overlay Networks (Swarm)
 
 For multi-host communication in Docker Swarm.
 
@@ -153,9 +153,10 @@ For multi-host communication in Docker Swarm.
 # Create overlay network (requires Swarm init)
 docker swarm init
 
+# --attachable allows non-Swarm containers to attach
 docker network create \
   --driver overlay \
-  --attachable \  # allows non-swarm containers to attach
+  --attachable \
   myapp-overlay
 
 # Services in same overlay network can communicate across hosts
@@ -174,7 +175,7 @@ docker service create \
 
 ---
 
-## Macvlan / IPvlan {#macvlan}
+## Macvlan and IPvlan
 
 Container gets its own IP address on your physical LAN.
 
@@ -196,7 +197,7 @@ Not typically needed for web services — use bridge + reverse proxy instead.
 
 ---
 
-## DNS and Container Discovery {#dns}
+## DNS and Container Discovery
 
 ### Service Discovery by Name
 
@@ -258,7 +259,7 @@ docker exec mycontainer netstat -tlnp  # if netstat available
 
 ---
 
-## Port Mapping Strategies {#ports}
+## Port Mapping Strategies
 
 ```yaml
 services:
@@ -300,7 +301,7 @@ traefik:
 
 ---
 
-## Volume Types {#volumes}
+## Volume Types
 
 | Type | Description | Persists? | Use for |
 |------|-------------|-----------|---------|
@@ -334,7 +335,7 @@ services:
 
 ---
 
-## Volume Patterns by Use Case {#patterns}
+## Volume Patterns by Use Case
 
 ### Database Persistence (Production)
 
@@ -396,7 +397,7 @@ services:
 
 ---
 
-## Backup and Restore Volumes {#backup}
+## Backup and Restore Volumes
 
 ### Backup Named Volume
 

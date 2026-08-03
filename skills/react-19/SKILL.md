@@ -160,7 +160,7 @@ function UpdateName() {
 Wraps an action function with state management. Replaces the pattern of `useState` + `useTransition` + error tracking for form-based mutations.
 
 ```tsx
-import { useActionState } from 'react'
+import { startTransition, useActionState } from 'react'
 
 // Signature:
 // const [state, dispatchAction, isPending] = useActionState(reducerAction, initialState, permalink?)
@@ -208,15 +208,26 @@ function Counter() {
     <div>
       <p>Count: {state.count}</p>
       {state.error && <p>{state.error}</p>}
-      <button onClick={() => dispatch({ type: 'increment' })} disabled={isPending}>+</button>
-      <button onClick={() => dispatch({ type: 'reset' })} disabled={isPending}>Reset</button>
+      <button
+        onClick={() => startTransition(() => dispatch({ type: 'increment' }))}
+        disabled={isPending}
+      >
+        +
+      </button>
+      <button
+        onClick={() => startTransition(() => dispatch({ type: 'reset' }))}
+        disabled={isPending}
+      >
+        Reset
+      </button>
     </div>
   )
 }
 ```
 
 **Important caveats:**
-- `dispatchAction` must be called from inside an Action (pass to `startTransition`, `action` prop, or event handler)
+- `dispatchAction` must run in an Action context: pass it to a form `action` prop or call it
+  inside `startTransition`. A plain event handler does not establish that context.
 - With Server Functions, `initialState` must be serializable
 - `permalink` param: for progressive enhancement with RSC — browser navigates there if JS hasn't loaded yet
 
@@ -564,7 +575,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
       href={href}
       onMouseEnter={() => {
         preload(`/page-data${href}.json`, { as: 'fetch' })
-        preconnect(new URL(href).origin)
+        preconnect(new URL(href, window.location.href).origin)
       }}
     >
       {children}
@@ -721,123 +732,6 @@ interface MyInputProps {
 3. Upgrade to React 19
 4. Run codemods
 5. Fix TypeScript errors
-
----
-
-## 14. tRPC + TanStack Stack Patterns
-
-### tRPC + `useOptimistic`
-
-Combine tRPC mutations with optimistic updates. Use `useMutation` from TanStack Query for the real call, `useOptimistic` for immediate UI feedback.
-
-```tsx
-import { useOptimistic, startTransition } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useTRPC } from '../lib/trpc'
-
-type Item = { id: string; name: string }
-
-function ItemList({ items }: { items: Item[] }) {
-  const trpc = useTRPC()
-  const queryClient = useQueryClient()
-
-  const [optimisticItems, addOptimistic] = useOptimistic(
-    items,
-    (current, newName: string) => [
-      ...current,
-      { id: `temp-${Date.now()}`, name: newName },
-    ]
-  )
-
-  const createItem = useMutation({
-    ...trpc.items.create.mutationOptions(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: trpc.items.list.queryKey() }),
-  })
-
-  const handleCreate = (formData: FormData) => {
-    const name = formData.get('name') as string
-    startTransition(async () => {
-      addOptimistic(name)
-      await createItem.mutateAsync({ name })
-    })
-  }
-
-  return (
-    <div>
-      {optimisticItems.map(item => (
-        <div key={item.id}>{item.name}</div>
-      ))}
-      <form action={handleCreate}>
-        <input name="name" />
-        <button type="submit">Add</button>
-      </form>
-    </div>
-  )
-}
-```
-
-### tRPC + `useActionState`
-
-For simpler forms where you just need pending + error state without TanStack Query integration:
-
-```tsx
-import { useActionState } from 'react'
-import { trpc } from '../lib/trpc'  // Direct caller, not hooks
-
-type FormState = { error: string | null; success: boolean }
-
-async function updateProfile(prev: FormState, formData: FormData): Promise<FormState> {
-  const displayName = formData.get('displayName') as string
-  try {
-    await trpc.user.update.mutate({ displayName })
-    return { error: null, success: true }
-  } catch (e) {
-    return { error: (e as Error).message, success: false }
-  }
-}
-
-function ProfileForm() {
-  const [state, dispatch, isPending] = useActionState(updateProfile, { error: null, success: false })
-
-  return (
-    <form action={dispatch}>
-      <input name="displayName" />
-      <button type="submit" disabled={isPending}>
-        {isPending ? 'Saving...' : 'Save'}
-      </button>
-      {state.error && <p className="text-red-500">{state.error}</p>}
-      {state.success && <p className="text-green-500">Saved!</p>}
-    </form>
-  )
-}
-```
-
-### TanStack Router + `use()` for Loaders
-
-```tsx
-// Route definition — loader returns a promise
-export const Route = createFileRoute('/users/$userId')({
-  loader: async ({ params }) => {
-    // Return the promise, not the awaited value
-    return { userPromise: fetchUser(params.userId) }
-  },
-  component: UserPage,
-})
-
-function UserPage() {
-  const { userPromise } = Route.useLoaderData()
-  return (
-    <Suspense fallback={<UserSkeleton />}>
-      <UserDetail userPromise={userPromise} />
-    </Suspense>
-  )
-}
-
-function UserDetail({ userPromise }: { userPromise: Promise<User> }) {
-  const user = use(userPromise)  // Suspends until resolved
-  return <div>{user.name}</div>
-}
-```
 
 ---
 

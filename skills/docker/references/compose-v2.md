@@ -4,28 +4,28 @@ Docker Compose v2 is the default since Docker Desktop 3.4+ and Docker Engine 20.
 Command: `docker compose` (space, not dash). `docker-compose` is deprecated.
 
 ## Table of Contents
-1. [File Anatomy](#anatomy)
+1. [File Anatomy](#file-anatomy)
 2. [Profiles](#profiles)
-3. [Watch Mode (Hot Reload)](#watch)
-4. [Health Checks + depends_on](#health-depends)
-5. [Environment Variables](#env)
-6. [Override Files](#overrides)
+3. [Watch Mode (Hot Reload)](#watch-mode-hot-reload)
+4. [Health Checks and depends_on](#health-checks-and-depends_on)
+5. [Environment Variables](#environment-variables)
+6. [Override Files](#override-files)
 7. [Networks](#networks)
 8. [Volumes](#volumes)
-9. [Resource Limits](#resources)
-10. [include: (compose multiple files)](#include)
-11. [extends: (reuse a service definition)](#extends)
-12. [Multiple files & merge precedence](#merge)
-13. [Lifecycle hooks (post_start / pre_stop)](#lifecycle)
-14. [pull_policy](#pull-policy)
-15. [Top-level configs:](#configs)
-16. [GPU / device reservations](#gpu)
-17. [models: (Compose for AI models)](#models)
-18. [Common Stacks](#stacks)
+9. [Resource Limits](#resource-limits)
+10. [include: (compose multiple files)](#include-compose-multiple-files)
+11. [extends: (reuse a service definition)](#extends-reuse-a-service-definition)
+12. [Multiple Files and Merge Precedence](#multiple-files-and-merge-precedence)
+13. [Lifecycle Hooks (post_start and pre_stop)](#lifecycle-hooks-post_start-and-pre_stop)
+14. [pull_policy](#pull_policy)
+15. [Top-level configs:](#top-level-configs)
+16. [GPU and Device Reservations](#gpu-and-device-reservations)
+17. [models: (Compose for AI models)](#models-compose-for-ai-models)
+18. [Common Stacks](#common-stacks)
 
 ---
 
-## File Anatomy {#anatomy}
+## File Anatomy
 
 ```yaml
 # compose.yml (preferred name, replaces docker-compose.yml)
@@ -75,7 +75,7 @@ volumes:
 
 ---
 
-## Profiles {#profiles}
+## Profiles
 
 Profiles allow selectively starting services. Perfect for: tools, monitoring,
 debug services that shouldn't run in prod.
@@ -131,7 +131,7 @@ docker compose --profile tools --profile cache --profile dev --profile monitorin
 
 ---
 
-## Watch Mode (Hot Reload) {#watch}
+## Watch Mode (Hot Reload)
 
 `docker compose watch` (v2.22+) synchronizes file changes without full rebuild.
 Better than bind mounts for: large node_modules, platform-specific binaries.
@@ -183,7 +183,7 @@ docker compose up --watch
 
 ---
 
-## Health Checks + depends_on {#health-depends}
+## Health Checks and depends_on
 
 Without health checks, `depends_on` only waits for container start — not readiness.
 Services can fail because postgres isn't accepting connections yet.
@@ -237,7 +237,7 @@ volumes:
 
 ---
 
-## Environment Variables {#env}
+## Environment Variables
 
 ```yaml
 services:
@@ -283,7 +283,7 @@ DATABASE_URL=postgres://user:realpassword@prod-host:5432/myapp
 
 ---
 
-## Override Files {#overrides}
+## Override Files
 
 Compose automatically merges `compose.yml` + `compose.override.yml`.
 Use for dev vs prod differences.
@@ -338,7 +338,7 @@ docker compose -f compose.yml up
 
 ---
 
-## Networks {#networks}
+## Networks
 
 ```yaml
 services:
@@ -391,7 +391,7 @@ services:
 
 ---
 
-## Volumes {#volumes}
+## Volumes
 
 ```yaml
 volumes:
@@ -439,7 +439,7 @@ docker volume inspect db_data   # inspect volume details
 
 ---
 
-## Resource Limits {#resources}
+## Resource Limits
 
 ```yaml
 services:
@@ -487,7 +487,7 @@ services:
 
 ---
 
-## include: (compose multiple files) {#include}
+## include: (compose multiple files)
 
 The top-level `include:` element pulls in **other complete Compose files** as
 first-class dependencies. Each included file is loaded as its **own** Compose
@@ -539,7 +539,7 @@ conflicts are detected. Use `include` to compose **independent sub-domains**; us
 
 ---
 
-## extends: (reuse a service definition) {#extends}
+## extends: (reuse a service definition)
 
 `extends:` reuses **one service's** configuration — from the same file or another
 file — as a base you then override. Unlike `include` (whole files) and `-f`
@@ -590,7 +590,7 @@ that every concrete service extends, so the cross-cutting config lives once.
 
 ---
 
-## Multiple files & merge precedence {#merge}
+## Multiple Files and Merge Precedence
 
 A frequent real-world footgun. When you give Compose multiple files, it builds
 **one** model by merging them in order.
@@ -617,8 +617,8 @@ A frequent real-world footgun. When you give Compose multiple files, it builds
   # result:    foo: { key1: value1, key2: VALUE, key3: value3 }
   ```
 
-- **Sequences (lists) APPEND** — the later file's items are added to the base's,
-  they do **not** replace:
+- **Ordinary sequences append** — for fields such as `dns`, `dns_search`, `env_file`,
+  and `tmpfs`, the later file's items are added to the base's:
 
   ```yaml
   # base:      dns: [1.1.1.1]
@@ -626,10 +626,27 @@ A frequent real-world footgun. When you give Compose multiple files, it builds
   # result:    dns: [1.1.1.1, 8.8.8.8]   # both! not just 8.8.8.8
   ```
 
-  This surprises people: you can **add** `ports`/`volumes`/`environment`-list
-  entries via an override, but you can't **remove or replace** a list item by
-  re-declaring the list. To fully replace, use a separate file set (or reset the
-  value to `[]` first isn't supported — restructure instead).
+  The unique-resource sequences `ports`, `volumes`, `secrets`, and `configs` are different.
+  Compose identifies entries by their unique key (for example target port, or container target
+  path) and merges a matching entry instead of blindly appending a duplicate. Non-matching
+  entries are appended.
+
+- **Reset or replace explicitly when needed.** Compose's custom YAML tags can clear or replace
+  inherited values. `!reset` resets a field to its type default; `!override` (Compose 2.24.4+)
+  replaces the field without applying normal merge rules:
+
+  ```yaml
+  services:
+    app:
+      # Clear all inherited ports.
+      ports: !reset []
+
+      # In another override, replace the inherited list wholesale.
+      # ports: !override
+      #   - "8443:443"
+  ```
+
+  These tags are Compose-specific, so generic YAML tooling may need Compose-aware parsing.
 
 - **Exception — `command`, `entrypoint`, `healthcheck.test` REPLACE**, not
   append. The later file's value wins wholesale (so a dev override can swap the
@@ -645,7 +662,7 @@ docker compose -f compose.yml -f compose.prod.yml config   # PRINT the merged mo
 
 ---
 
-## Lifecycle hooks (post_start / pre_stop) {#lifecycle}
+## Lifecycle Hooks (post_start and pre_stop)
 
 `post_start` and `pre_stop` run commands **after a container starts** / **before
 it's stopped**, separately from `ENTRYPOINT`/`COMMAND`. Their headline feature:
@@ -684,7 +701,7 @@ Semantics to know:
 
 ---
 
-## pull_policy {#pull-policy}
+## pull_policy
 
 Controls when Compose pulls an image before starting a service. Matters because
 the right choice differs sharply across dev / CI / prod.
@@ -716,7 +733,7 @@ pre-pulled).
 
 ---
 
-## Top-level configs: {#configs}
+## Top-level configs:
 
 `configs:` injects **non-secret** config files/values into a container at runtime
 — without rebuilding the image and without managing host bind-mount paths. Use it
@@ -754,7 +771,7 @@ host too.)
 
 ---
 
-## GPU / device reservations {#gpu}
+## GPU and Device Reservations
 
 Reserve accelerators (GPUs, TPUs) for a service via
 `deploy.resources.reservations.devices`. **Prerequisite:** the host needs the
@@ -790,7 +807,7 @@ model).
 
 ---
 
-## models: (Compose for AI models) {#models}
+## models: (Compose for AI models)
 
 Compose **v2.38+** treats AI models as first-class dependencies via a top-level
 `models:` element plus a per-service `models:` binding. Docker Model Runner (or
@@ -816,7 +833,7 @@ endpoint/embeddings options, and DMR-vs-Ollama is `docker-ai.md` §2–§3.
 
 ---
 
-## Common Stacks {#stacks}
+## Common Stacks
 
 ### Node.js + Postgres + Redis
 
@@ -954,4 +971,3 @@ docker compose up --scale app=3
 - https://docs.docker.com/reference/compose-file/configs/
 - https://docs.docker.com/reference/compose-file/deploy/
 - https://docs.docker.com/compose/how-tos/model-runner/
-

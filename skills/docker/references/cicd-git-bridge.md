@@ -102,6 +102,7 @@ jobs:
           driver: docker-container
 
       - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -122,13 +123,41 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Build and push
+      # PRs need a loadable, single-platform image because a non-pushed multi-platform
+      # result has no local image and no registry digest for Trivy to scan.
+      - name: Build PR image for local scan
+        if: github.event_name == 'pull_request'
+        id: build-pr
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          platforms: linux/amd64
+          tags: local/pr-image:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy vulnerability scan (PR image)
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: local/pr-image:${{ github.sha }}
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL
+          vuln-type: os,library
+
+      - name: Build and push multi-platform image
+        if: github.event_name != 'pull_request'
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          # No prod deploy on PRs — build for verification but do not push.
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -137,8 +166,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Trivy scans the built image. exit-code 1 fails the job on CRITICAL.
-      - name: Trivy vulnerability scan
+      # Trivy scans the pushed digest. exit-code 1 fails the job on CRITICAL.
+      - name: Trivy vulnerability scan (pushed image)
+        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
@@ -454,7 +484,9 @@ Build N images concurrently (one image per service/app):
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/amd64,linux/arm64
+          load: ${{ github.event_name == 'pull_request' }}
+          # Docker can load one platform locally; non-PR builds push a multi-platform index.
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=registry,ref=ghcr.io/my-org/${{ matrix.app }}:buildcache
           cache-to: type=registry,ref=ghcr.io/my-org/${{ matrix.app }}:buildcache,mode=max
@@ -611,7 +643,8 @@ image → signed + SBOM'd + pushed → the GitHub Release notes can reference
   during build can throttle the buildserver. Authenticate to Docker Hub for base-image pulls,
   or mirror bases into GHCR. (GHCR itself has generous limits for org members.)
 - **PRs from forks can't access secrets.** `pull_request` from a fork gets no `packages: write`
-  and no secrets → build with `push: false` on PRs (as in §2). Use `pull_request_target` only
+  and no secrets → build a single-platform image with `load: true` and scan its local tag (as in
+  §2). Use `pull_request_target` only
   with extreme care (it runs trusted context against untrusted code).
 - **Multi-arch push needs a manifest list, not per-arch tags.** `docker/build-push-action` with
   `platforms:` handles this automatically; doing it by hand requires `buildx imagetools create`.
@@ -627,4 +660,3 @@ Cross-references:
 - `buildkit-multiplatform.md` — buildx drivers, QEMU internals, multi-arch manifests
 
 Sources: https://docs.docker.com/build/ci/github-actions/, https://github.com/docker/build-push-action, https://github.com/docker/metadata-action, https://github.com/aquasecurity/trivy-action, https://docs.sigstore.dev/cosign/signing/overview/, https://docs.docker.com/build/cache/backends/, https://github.com/opencontainers/image-spec/blob/main/annotations.md
-

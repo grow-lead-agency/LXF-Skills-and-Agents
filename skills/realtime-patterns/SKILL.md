@@ -52,8 +52,6 @@ Need realtime?
 
 | File | Content |
 |------|---------|
-| [supabase-realtime.md](references/supabase-realtime.md) | Postgres Changes, Broadcast, Presence — API, RLS, filters, gotchas |
-| [cloudflare-durable-objects.md](references/cloudflare-durable-objects.md) | WebSocket Hibernation, Alarms, state, Hono integration |
 | [react-subscription-patterns.md](references/react-subscription-patterns.md) | useEffect cleanup, reconnection hooks, React patterns |
 | [connection-lifecycle.md](references/connection-lifecycle.md) | Connect, reconnect, backoff, heartbeat, scaling |
 | [sources.md](references/sources.md) | All research URLs used |

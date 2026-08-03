@@ -43,7 +43,8 @@ the effective versions before changing configuration:
 
 ```bash
 php -v
-composer show laravel/framework phpunit/phpunit
+composer show laravel/framework
+composer show phpunit/phpunit
 vendor/bin/phpunit --version
 ```
 
@@ -1327,7 +1328,7 @@ Set test-only service values in the CI secret or environment configuration:
 
 ```dotenv
 APP_ENV=testing
-APP_KEY=base64:replace-with-a-test-only-key
+APP_KEY=base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 DB_CONNECTION=mysql
 DB_HOST=mysql
 DB_PORT=3306

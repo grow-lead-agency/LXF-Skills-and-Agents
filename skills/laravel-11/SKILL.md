@@ -197,7 +197,7 @@ class GenerateInvoicePdf implements ShouldQueue
 - **Pass IDs, not models with loaded relations** — models are re-fetched on the worker via `SerializesModels`; loaded relations are dropped, stale state avoided.
 - Dispatch: `GenerateInvoicePdf::dispatch($invoice->id);` — options: `->onQueue('exports')`, `->delay(now()->addMinutes(5))`, `Bus::chain([...])->dispatch()`.
 - After changing job code, **restart workers** (`sail artisan queue:restart`) — workers cache booted code.
-- Failed jobs land in `failed_jobs`: `queue:failed` to list, `queue:retry {id|--all}` to retry, `queue:flush` to purge.
+- Failed jobs land in `failed_jobs`: `queue:failed` to list, `queue:retry {id}` or `queue:retry all` to retry (`all` is an argument, not a flag), `queue:flush` to purge.
 - Production runs `php artisan queue:work` under **supervisor** (deploy reloads supervisor). Locally: `sail artisan queue:work --tries=3` or `queue:listen` while iterating (picks up code changes, slower).
 - Database driver caveat: no native rate limiting/blocking like Redis — keep jobs idempotent; a job can run twice if a worker dies mid-job after DB timeout.
 

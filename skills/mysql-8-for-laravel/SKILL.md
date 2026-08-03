@@ -213,3 +213,14 @@ max_connections >= fpm pm.max_children        (web)
 ```
 
 If FPM `pm.max_children` + workers approaches `max_connections`, either lower FPM children (usually CPU/RAM-bound anyway), or raise `max_connections` — each idle connection is cheap in MySQL 8, but hundreds of *active* connections thrash; throughput peaks near a small multiple of core count. Symptoms of misfit: `SQLSTATE[HY000] [1040] Too many connections` during deploys (old+new FPM pools overlapping) or queue scale-ups. ProxySQL-style pooling is the tool if this ever becomes structural — not needed at current scale.
+
+## Sources
+
+- MySQL 8.0 Reference Manual — https://dev.mysql.com/doc/refman/8.0/en/
+- Optimization and indexes — https://dev.mysql.com/doc/refman/8.0/en/optimization.html
+- EXPLAIN / EXPLAIN ANALYZE — https://dev.mysql.com/doc/refman/8.0/en/explain.html
+- JSON data type and functional indexes — https://dev.mysql.com/doc/refman/8.0/en/json.html
+- Online DDL operations — https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
+- InnoDB locking and transaction model — https://dev.mysql.com/doc/refman/8.0/en/innodb-locking-transaction-model.html
+- Laravel 11 database & migrations — https://laravel.com/docs/11.x/migrations
+- Laravel 11 Eloquent relationships (eager loading) — https://laravel.com/docs/11.x/eloquent-relationships

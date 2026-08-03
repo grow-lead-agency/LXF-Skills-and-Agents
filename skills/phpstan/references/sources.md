@@ -5,7 +5,7 @@
 Verified via Context7 (`/phpstan/phpstan`, 2.2.x branch docs) + GitHub Releases API (`gh api repos/phpstan/phpstan/releases/latest`).
 
 - **PHPStan: 2.1.51 → 2.2.5** (released 2026-07-05). Release notes: https://phpstan.org/blog/phpstan-2-2-unsealed-array-shapes-safer-array-keys — additions include unsealed array shapes, the `decimal-int-string` and `non-decimal-int-string` types, and the `reportUnsafeArrayStringKeyCasting` configuration parameter. These changes do not break the configuration or API documented in this skill.
-- Rule levels confirmed unchanged: 0-10 + bleeding edge 11 (https://github.com/phpstan/phpstan/blob/2.2.x/website/src/user-guide/rule-levels.md via Context7).
+- Rule levels confirmed as 0-10; bleeding edge is a separate included ruleset, not level 11 (https://github.com/phpstan/phpstan/blob/2.2.x/website/src/user-guide/rule-levels.md via Context7).
 - Extensions remained on compatible PHPStan 2.x release lines with patch-only updates and no major-version drift: phpstan-doctrine 2.0.28, phpstan-symfony 2.0.20, phpstan-phpunit 2.0.18, phpstan-strict-rules 2.0.11, and phpstan-deprecation-rules 2.0.4 (all checked via `gh api repos/phpstan/<ext>/releases/latest`).
 - **Verdict at the time:** only the version stamp had drifted. The configuration model, baseline workflow, rule-level table, and extension configuration remained accurate.
 
@@ -16,7 +16,7 @@ Standalone PHPStan 2.x guidance for legacy PHP applications and greenfield PHP s
 ### Core documentation
 - https://phpstan.org/ — homepage
 - https://phpstan.org/user-guide/getting-started — installation and basic usage
-- https://phpstan.org/user-guide/rule-levels — 11 levels (0-10), plus bleeding edge level 11
+- https://phpstan.org/user-guide/rule-levels — 11 numeric levels, numbered 0 through 10
 - https://phpstan.org/user-guide/baseline — baseline feature and legacy-codebase strategy
 - https://phpstan.org/config-reference — complete NEON configuration reference
 - https://phpstan.org/blog/what-is-bleeding-edge — bleeding edge mode

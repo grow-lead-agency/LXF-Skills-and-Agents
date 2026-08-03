@@ -19,10 +19,14 @@ export type AppError = {
 
 export function classifyError(status: number, serverMessage?: string): AppError {
   switch (status) {
+    case 400:
+      return { status: 400, message: serverMessage || 'The request is invalid.', logToSentry: false }
     case 401:
       return { status: 401, message: 'You must be signed in.', logToSentry: false }
     case 403:
       return { status: 403, message: 'You do not have permission for this action.', logToSentry: false }
+    case 404:
+      return { status: 404, message: 'The requested resource was not found.', logToSentry: false }
     case 422:
       return { status: 422, message: serverMessage || 'Please check the submitted data.', logToSentry: false }
     case 429:
@@ -93,11 +97,11 @@ describe('classifyError', () => {
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
-import * as Sentry from '@sentry/nextjs'
-import ErrorPage from '@/app/error'
+import * as Sentry from '@sentry/react'
+import { ErrorBoundaryFallback } from '@/components/error-boundary-fallback'
 
 // Mock Sentry
-vi.mock('@sentry/nextjs', () => ({
+vi.mock('@sentry/react', () => ({
   captureException: vi.fn(),
 }))
 
@@ -107,12 +111,12 @@ function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }) {
   return <div>OK</div>
 }
 
-describe('Error Boundary (app/error.tsx)', () => {
+describe('ErrorBoundaryFallback', () => {
   it('renders fallback UI with user-friendly message', () => {
     const error = new Error('Something broke')
     const reset = vi.fn()
 
-    render(<ErrorPage error={error} reset={reset} />)
+    render(<ErrorBoundaryFallback error={error} reset={reset} />)
 
     // Must show user-friendly message, NOT the raw error
     expect(screen.getByText(/something went wrong/i)).toBeInTheDocument()
@@ -124,7 +128,7 @@ describe('Error Boundary (app/error.tsx)', () => {
     const error = new Error('Transient error')
     const reset = vi.fn()
 
-    render(<ErrorPage error={error} reset={reset} />)
+    render(<ErrorBoundaryFallback error={error} reset={reset} />)
 
     const retryButton = screen.getByRole('button', { name: /try again/i })
     await user.click(retryButton)
@@ -136,7 +140,7 @@ describe('Error Boundary (app/error.tsx)', () => {
     const error = new Error('Should be reported')
     const reset = vi.fn()
 
-    render(<ErrorPage error={error} reset={reset} />)
+    render(<ErrorBoundaryFallback error={error} reset={reset} />)
 
     expect(Sentry.captureException).toHaveBeenCalledWith(error)
   })
@@ -146,7 +150,7 @@ describe('Error Boundary (app/error.tsx)', () => {
     error.stack = 'at secretFunction (secret-file.ts:42)'
     const reset = vi.fn()
 
-    render(<ErrorPage error={error} reset={reset} />)
+    render(<ErrorBoundaryFallback error={error} reset={reset} />)
 
     expect(screen.queryByText(/secretFunction/)).not.toBeInTheDocument()
     expect(screen.queryByText(/secret-file/)).not.toBeInTheDocument()
@@ -161,9 +165,13 @@ describe('Error Boundary (app/error.tsx)', () => {
 ```typescript
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
 import { toast } from 'sonner'
 import { BookingForm } from '../booking-form'
+
+const server = setupServer()
 
 // Mock sonner
 vi.mock('sonner', () => ({
@@ -176,9 +184,14 @@ vi.mock('sonner', () => ({
 }))
 
 describe('Toast messages', () => {
+  beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  afterEach(() => server.resetHandlers())
+  afterAll(() => server.close())
 
   it('shows success toast after creating booking', async () => {
     const user = userEvent.setup()
@@ -233,40 +246,59 @@ describe('Toast messages', () => {
 
 ---
 
-## Server Action Error Shape
+## Backend Error Contracts
 
-Server Actions must NEVER throw to the client. Test the return shape:
+### Laravel policy + MySQL boundary
+
+Exercise the HTTP boundary with a real MySQL test database. A forbidden mutation must
+return the public error shape and leave the table unchanged:
+
+```php
+use App\Models\Booking;
+use App\Models\User;
+
+public function test_user_cannot_delete_another_users_booking(): void
+{
+    $actor = User::factory()->create();
+    $booking = Booking::factory()->for(User::factory())->create();
+
+    $this->actingAs($actor)
+        ->deleteJson("/api/bookings/{$booking->id}")
+        ->assertForbidden()
+        ->assertJsonMissing(['exception', 'trace']);
+
+    $this->assertDatabaseHas('bookings', ['id' => $booking->id]);
+}
+
+public function test_invalid_booking_returns_validation_errors(): void
+{
+    $actor = User::factory()->create();
+
+    $this->actingAs($actor)
+        ->postJson('/api/bookings', ['date' => 'not-a-date'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['service_id', 'date']);
+}
+```
+
+### NestJS GraphQL resolver boundary
+
+Resolver tests should verify the public GraphQL exception and ensure rejected requests do
+not reach the mutation service:
 
 ```typescript
-import { describe, it, expect } from 'vitest'
-import { createBooking } from '../actions/create-booking'
-import { createMockSupabase } from '@/test/mocks/supabase'
+import { ForbiddenException } from '@nestjs/common'
 
-describe('Server Action error shape', () => {
-  it('returns { success: true, data } on success', async () => {
-    // ... mock successful DB call
-    const result = await createBooking(validInput)
-
-    expect(result).toHaveProperty('success', true)
-    expect(result).toHaveProperty('data')
-    expect(result).not.toHaveProperty('error')
+it('rejects a mutation outside the actor scope', async () => {
+  authorization.assertCanCreateBooking.mockImplementation(() => {
+    throw new ForbiddenException()
   })
 
-  it('returns { success: false, error: string } on failure', async () => {
-    // ... mock DB failure
-    const result = await createBooking(validInput)
+  await expect(
+    resolver.createBooking(actor, { accountId: 'other-account', serviceId: 'svc-1' })
+  ).rejects.toBeInstanceOf(ForbiddenException)
 
-    expect(result).toHaveProperty('success', false)
-    expect(result).toHaveProperty('error')
-    expect(typeof result.error).toBe('string')
-    expect(result.error!.length).toBeGreaterThan(0)
-  })
-
-  it('never throws (catches all errors)', async () => {
-    // ... mock catastrophic failure
-    await expect(createBooking(validInput)).resolves.toBeDefined()
-    // If this rejects, the Server Action is throwing to client — BAD
-  })
+  expect(bookingService.create).not.toHaveBeenCalled()
 })
 ```
 
@@ -278,9 +310,9 @@ Test that Sentry.captureException is called in the right places:
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import * as Sentry from '@sentry/nextjs'
+import * as Sentry from '@sentry/react'
 
-vi.mock('@sentry/nextjs', () => ({
+vi.mock('@sentry/react', () => ({
   captureException: vi.fn(),
   captureMessage: vi.fn(),
   setUser: vi.fn(),

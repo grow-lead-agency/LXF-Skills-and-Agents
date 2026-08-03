@@ -56,7 +56,7 @@ resource "hcloud_server" "web" {
 # SSH key
 resource "hcloud_ssh_key" "default" {
   name       = "default"
-  public_key = file("~/.ssh/id_ed25519.pub")
+  public_key = file(pathexpand("~/.ssh/id_ed25519.pub"))
 }
 
 # Data source — latest Ubuntu image
@@ -336,41 +336,42 @@ resource "cloudflare_zone_setting" "main" {
 ```hcl
 # Rate limiting
 resource "cloudflare_ruleset" "rate_limit" {
-  zone_id     = data.cloudflare_zone.main.id
+  zone_id     = data.cloudflare_zone.main.zone_id
   name        = "Rate Limiting Rules"
   description = "Custom rate limiting"
   kind        = "zone"
   phase       = "http_ratelimit"
 
-  rules {
+  rules = [{
     description = "Rate limit API"
     expression  = "(http.request.uri.path matches \"^/api/\")"
     action      = "block"
-    ratelimit {
+    enabled     = true
+    ratelimit = {
       characteristics     = ["ip.src"]
       period              = 60
       requests_per_period = 100
       mitigation_timeout  = 600
     }
-  }
+  }]
 }
 
 # Managed WAF
 resource "cloudflare_ruleset" "managed_waf" {
-  zone_id     = data.cloudflare_zone.main.id
+  zone_id     = data.cloudflare_zone.main.zone_id
   name        = "Managed WAF"
   kind        = "zone"
   phase       = "http_request_firewall_managed"
 
-  rules {
+  rules = [{
     description = "Cloudflare OWASP"
     action      = "execute"
-    action_parameters {
+    action_parameters = {
       id = "4814384a9e5d4991b9815dcfc25d2f1f"  # OWASP Core Ruleset
     }
     expression = "true"
     enabled    = true
-  }
+  }]
 }
 ```
 
@@ -530,7 +531,7 @@ provider "kubernetes" {
 
 # Helm provider
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     config_path = "~/.kube/config"
   }
 }
@@ -603,8 +604,8 @@ resource "kubernetes_secret" "app_secrets" {
   }
 
   data = {
-    DATABASE_URL = base64encode(var.database_url)
-    API_KEY      = base64encode(var.api_key)
+    DATABASE_URL = var.database_url
+    API_KEY      = var.api_key
   }
 
   type = "Opaque"

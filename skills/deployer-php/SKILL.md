@@ -128,7 +128,8 @@ dep deploy:unlock             # clear a stuck lock after a killed deploy
 old releases (up to `keep_releases`) stay on disk with their own built assets
 and vendor dir. After rolling back, reload php-fpm and restart workers too
 (the hooks above run on `deploy`, not on `rollback` — do it manually or hook
-`after('rollback:publish', ...)` the same way).
+`after('rollback', ...)` the same way; `rollback` is a single task, there is no
+`rollback:publish`).
 
 What rollback does **not** undo:
 
@@ -187,3 +188,13 @@ A killed/crashed deploy can leave the lock on — subsequent deploys fail with
 `releases/`, `shared/` etc. are created automatically (`deploy:setup` inside
 `deploy:prepare`), but you must place `shared/.env` manually before the first
 successful deploy — `artisan:config:cache` fails without `APP_KEY`.
+
+## Sources
+
+- Deployer documentation — https://deployer.org/docs/7.x/getting-started
+- Laravel recipe — https://deployer.org/docs/7.x/recipe/laravel
+- Common recipe (`deploy:prepare`, `deploy:publish`, releases model) — https://deployer.org/docs/7.x/recipe/common
+- Hosts & configuration — https://deployer.org/docs/7.x/hosts
+- PHP-FPM contrib recipe — https://deployer.org/docs/7.x/contrib/php-fpm
+- Laravel deployment guide — https://laravel.com/docs/11.x/deployment
+- Laravel queues (`queue:restart` on deploy) — https://laravel.com/docs/11.x/queues
