@@ -1,4 +1,4 @@
-# datamixer-stack — Agent Skills for your platform
+# LXF-Skills-and-Agents — Agent Skills for your platform
 
 Claude Code plugin with agent skills tailored to the datamixer platform stack:
 **Laravel 11** (PHP 8.4, MySQL 8, Sanctum, spatie/laravel-permission, Pusher broadcasting,
@@ -12,7 +12,7 @@ fits your codebase on the first try, instead of generic boilerplate.
 As a plugin (recommended — one command, easy updates):
 
 ```bash
-claude plugin install https://github.com/grow-lead-agency/datamixer-skills
+claude plugin install https://github.com/grow-lead-agency/LXF-Skills-and-Agents
 ```
 
 Or manually — copy any `skills/<name>/` directory into your repo's `.claude/skills/`

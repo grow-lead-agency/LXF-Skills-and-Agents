@@ -1,5 +1,5 @@
 {
-  "name": "datamixer-stack",
+  "name": "lxf-skills-and-agents",
   "version": "1.0.0",
   "description": "Agent skills for the datamixer platform stack — Laravel 11 (PHP 8.4, MySQL 8, Sanctum, spatie/permission, Pusher, Deployer, KSeF) + NestJS 11 GraphQL BFF + React storefront",
   "author": {
