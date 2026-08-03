@@ -1,0 +1,12 @@
+{
+  "name": "datamixer-stack",
+  "version": "1.0.0",
+  "description": "Agent skills for the datamixer platform stack — Laravel 11 (PHP 8.4, MySQL 8, Sanctum, spatie/permission, Pusher, Deployer, KSeF) + NestJS 11 GraphQL BFF + React storefront",
+  "author": {
+    "name": "GrowLead",
+    "url": "https://github.com/grow-lead-agency"
+  },
+  "license": "MIT",
+  "keywords": ["laravel", "nestjs", "graphql", "mysql", "pusher", "deployer", "ksef", "bff"],
+  "skills": "./skills/"
+}
