@@ -1,790 +1,394 @@
 ---
 name: vite
 description: >-
-  Vite 8.x (Rolldown, GA) build tool mastery — vite.config.ts, plugins, Environment API,
-  dev server, build optimization, library mode, and Vitest integration. Also covers the
-  Vite 6.x baseline (older/pinned projects) and the Vite 6→8 migration delta.
-  Use when configuring Vite, debugging builds or HMR, adding plugins, splitting
-  chunks, setting up env vars, or integrating Tailwind v4 / edge static assets.
-  Not for: general webpack configuration (Vite 8 bundles via Rolldown, not Rollup+esbuild —
-  see section 12).
-  Triggers: vite, vite.config, defineConfig, import.meta.env, VITE_, HMR, vite build,
-  vite dev, optimizeDeps, rollupOptions, rolldownOptions, manualChunks, @vitejs/plugin-react,
-  @tailwindcss/vite, vitest, library mode, SSR, vite plugin, chunk splitting, rolldown,
-  rolldown-vite, vite 8, vite 6.
+  Configure and troubleshoot two independent React applications: a Vite 6 / React 18
+  Laravel 11 admin built with laravel-vite-plugin, Bootstrap 5, and Sass; and a Vite 8 /
+  React 19 storefront SPA using react-router-dom 7 and a GraphQL BFF. Covers version-safe
+  vite.config files, plugins, Blade @vite integration, SCSS, env variables, dev proxies,
+  builds, code splitting, dependency optimization, HMR, library mode, and Vitest. Use for
+  Vite config, import.meta.env, VITE_, laravel-vite-plugin, Rolldown, Oxc, or HMR issues.
 ---
 
-# Vite — Build Tool Mastery
+# Vite for Two Independent React Apps
 
-Vite build tool for a modern React stack: monorepo + React 19 + TanStack Router + Tailwind v4 (optional edge/static asset hosting).
+Treat the applications as separate projects. Each has its own `package.json`, lockfile,
+`vite.config.*`, dependency versions, dev server, and build command. Do not introduce
+workspace aliases, a shared monorepo config, a routing generator, or a Vite router plugin.
 
-**Current stable: Vite 8.1.x** (Vite 8.0 GA'd 2026-06-23, Rolldown merged in as the default
-unified bundler; latest patch 8.1.4 — last verified 2026-07-15 via npm + Context7
-`/vitejs/vite`). **If a project still pins `vite@^6.3.x`** (e.g. an older project
-that hasn't been bumped), most of this skill applies unchanged — `build.rollupOptions`
-still works via Vite 8's automatic compat layer, and `@tailwindcss/vite` / `@vitejs/plugin-react`
-/ TanStack Router plugin all work identically across 6→8. See **## 13. Vite 8 (Rolldown) —
-What Changed** for the delta if upgrading.
+| Application | Runtime and integration | Vite-specific rule |
+|---|---|---|
+| Laravel admin | Vite 6, React 18, Bootstrap 5, Laravel 11 | Laravel owns the HTML; `laravel-vite-plugin` owns entries, refresh, hot-file, and manifest integration |
+| Storefront | Vite 8, React 19, `react-router-dom` 7, GraphQL BFF | Vite owns `index.html`; React Router is configured in application code |
 
-## Disambiguation
+Always inspect the installed Vite major before changing advanced options:
 
-- **NX task inference** from `vite.config.ts` → NX monorepo docs / project NX skill
-- **Vitest in Workers context** → `@cloudflare/vitest-pool-workers` — see project Vitest/Workers docs if present
-- **Astro projects** → Astro is built on Vite (Astro 5.x = Vite 6+ inside) but has its **own config** in `astro.config.mjs`, not a top-level `vite.config.ts`. Pass Vite plugins via `vite: { plugins: [...] }` in `astro.config.mjs`. Tailwind v4 in Astro = `@tailwindcss/vite` as a Vite plugin (not the deprecated `@astrojs/tailwind`).
-- **Tailwind CSS architecture** → project frontend/styling conventions
-- **TanStack Router file-based routing plugin** → TanStack Router docs / project routing skill
+```bash
+npm ls vite
+```
 
----
+## 1. Default Configurations
 
-## 1. vite.config.ts — Anatomy
+### Laravel admin: Vite 6
 
-```ts
-// apps/{hub}/web/vite.config.ts
-import tailwindcss from "@tailwindcss/vite";
-import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
-import react from "@vitejs/plugin-react";
+```js
+// vite.config.js (Laravel project root)
 import { defineConfig } from "vite";
+import laravel from "laravel-vite-plugin";
+import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   plugins: [
-    TanStackRouterVite(),   // 1. FIRST — generates routeTree.gen.ts before React transform
-    react(),                // 2. JSX transform, Fast Refresh
-    tailwindcss(),          // 3. Tailwind v4 via @tailwindcss/vite (not PostCSS)
+    laravel({
+      input: ["resources/js/app.jsx"],
+      refresh: true,
+    }),
+    react(),
   ],
-  server: {
-    port: 5174,
-    proxy: {
-      "/api": { target: "http://localhost:8788", changeOrigin: true },
-    },
-  },
   resolve: {
-    alias: { "@": "./src" },  // Allows `import { X } from "@/components/X"`
-  },
-  build: { outDir: "dist" },
-});
-```
-
-**Plugin order matters:** TanStackRouterVite must run before react() so route tree is generated before JSX transformation.
-
-### Conditional config (dev vs build)
-
-```ts
-export default defineConfig(({ command, mode }) => {
-  const isDev = command === "serve";
-  return {
-    plugins: [react()],
-    build: {
-      sourcemap: isDev ? true : "hidden",   // inline in dev, external in prod
-      minify: isDev ? false : "esbuild",
+    alias: {
+      "@": fileURLToPath(new URL("./resources/js", import.meta.url)),
+      "@styles": fileURLToPath(new URL("./resources/sass", import.meta.url)),
     },
-  };
-});
-```
-
-### Async config + loadEnv
-
-```ts
-import { defineConfig, loadEnv } from "vite";
-
-export default defineConfig(({ mode }) => {
-  // .env files are NOT available via process.env inside config — use loadEnv
-  const env = loadEnv(mode, process.cwd(), "");  // "" = include ALL vars (bypass VITE_ filter)
-  return {
-    server: { port: Number(env.PORT) || 5173 },
-    define: { __APP_ENV__: JSON.stringify(env.APP_ENV) },
-  };
-});
-```
-
----
-
-## 2. Environment Variables
-
-### Prefix rules
-
-| Prefix | Exposed to browser | Use case |
-|--------|-------------------|----------|
-| `VITE_` | Yes (`import.meta.env.VITE_X`) | Public API URLs, feature flags |
-| No prefix | No | Server-only secrets (DB passwords) |
-
-```ts
-// VITE_ vars available anywhere in frontend code:
-const apiUrl = import.meta.env.VITE_API_URL;
-const isProd  = import.meta.env.PROD;      // built-in boolean
-const isDev   = import.meta.env.DEV;       // built-in boolean
-const mode    = import.meta.env.MODE;      // "development" | "production" | custom
-const base    = import.meta.env.BASE_URL;  // from config.base
-```
-
-### .env file hierarchy (priority, highest first)
-
-```
-.env.[mode].local    # mode-specific, gitignored — secrets for that mode
-.env.[mode]          # mode-specific
-.env.local           # always loaded, gitignored — local overrides
-.env                 # always loaded, committed
-```
-
-Do NOT expose server secrets via `VITE_` — browser-prefixed vars are public. Put secrets in the server runtime (env, secret store, or platform secret API).
-
-### TypeScript typing
-
-```ts
-// src/vite-env.d.ts  (auto-created by Vite scaffolding, extend as needed)
-/// <reference types="vite/client" />
-
-interface ImportMetaEnv {
-  readonly VITE_API_URL: string;
-  readonly VITE_APP_NAME: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
-```
-
-### HTML env replacement
-
-```html
-<!-- index.html — replaced at build time -->
-<title>%VITE_APP_NAME%</title>
-<meta name="description" content="%VITE_APP_DESCRIPTION%">
-```
-
----
-
-## 3. Monorepo Setup (workspaces)
-
-### Key pattern: each app has its own vite.config.ts
-
-Do NOT share a single vite.config.ts across the monorepo. Each app (`apps/auth/web`, `apps/app/web`, `apps/backoffice/web`) has its own config with app-specific port and proxy target.
-
-### resolve.alias for workspace packages
-
-Vite resolves `@acme/*` workspace packages automatically via package-manager workspaces (npm/pnpm). No special alias config needed — just ensure packages export correctly:
-
-```json
-// packages/ui/package.json
-{
-  "name": "@acme/ui",
-  "exports": {
-    ".": {
-      "import": "./src/index.ts",    // source for dev (Vite resolves TS directly)
-      "require": "./dist/index.cjs"  // built for external consumers
-    }
-  }
-}
-```
-
-### optimizeDeps — pre-bundling workspace packages
-
-By default, Vite skips pre-bundling workspace packages (linked via `node_modules`). If you see `[vite] Forced re-optimization of dependencies` loops or slow startup, add:
-
-```ts
-export default defineConfig({
-  optimizeDeps: {
-    include: [
-      "@acme/ui",
-      "@acme/auth",
-      // Add workspace packages that have complex re-exports
-    ],
-    // Exclude packages that are pure ESM and bundle correctly:
-    exclude: ["@acme/tsconfig"],
   },
-});
-```
-
-### Path resolution across packages
-
-For `@/` alias to work in packages (not just apps), configure it per-package:
-
-```ts
-// packages/ui/vite.config.ts (if building package with vite)
-export default defineConfig({
-  resolve: { alias: { "@": new URL("./src", import.meta.url).pathname } },
-});
-```
-
----
-
-## 4. Plugins — Recommended Stack
-
-### @vitejs/plugin-react
-
-```ts
-import react from "@vitejs/plugin-react";
-
-react({
-  // Babel transform options (Vite 6 uses Babel by default; SWC variant = plugin-react-swc)
-  babel: {
-    plugins: ["babel-plugin-react-compiler"],  // React Compiler (optional, experimental)
-  },
-  // Fast Refresh is ON by default in dev — no config needed
-})
-```
-
-**When to use plugin-react-swc instead:** SWC is faster (~20x) but less flexible for custom Babel plugins. For a stack without custom Babel transforms, both work identically.
-
-### @tailwindcss/vite (Tailwind v4)
-
-```ts
-import tailwindcss from "@tailwindcss/vite";
-
-// Tailwind v4 uses @tailwindcss/vite plugin — NOT PostCSS
-// Add to plugins array (position 3, after TanStack and React):
-plugins: [TanStackRouterVite(), react(), tailwindcss()]
-```
-
-**Critical:** Do NOT use PostCSS config (`postcss.config.js`) with Tailwind v4 when using `@tailwindcss/vite`. The Vite plugin replaces PostCSS integration. Having both causes conflicts.
-
-### TanStack Router Plugin
-
-```ts
-import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
-
-TanStackRouterVite({
-  routesDirectory: "./src/routes",      // default
-  generatedRouteTree: "./src/routeTree.gen.ts",  // default
-  autoCodeSplitting: true,              // split routes into separate chunks
-})
-```
-
-### vite-plugin-svgr (SVG as React components)
-
-```ts
-import svgr from "vite-plugin-svgr";
-
-svgr({
-  svgrOptions: { icon: true },  // adds width/height="1em" for icon use
-})
-```
-
-Usage: `import Logo from "./logo.svg?react"`
-
-### Other useful plugins
-
-```ts
-// Bundle analysis
-import { visualizer } from "rollup-plugin-visualizer";
-visualizer({ open: true, gzipSize: true })  // generates stats.html
-
-// Environment variable validation
-import { z } from "zod";
-// Use @t3-oss/env-core — no extra plugin needed
-```
-
----
-
-## 5. Build Optimization
-
-### Chunk splitting (manualChunks)
-
-```ts
-export default defineConfig({
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Vendor chunks — stable hash, long-term caching
-          "react-vendor": ["react", "react-dom"],
-          "router-vendor": ["@tanstack/react-router", "@tanstack/react-query"],
-          "trpc-vendor": ["@trpc/client", "@trpc/tanstack-react-query"],
-        },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        // Inject shared Sass APIs only; emitted CSS here would be duplicated.
+        additionalData: '@use "@styles/tokens" as *;',
       },
     },
   },
 });
 ```
 
-**Strategy:** Split large stable deps into separate chunks so they can be cached independently from app code. For most SPAs aggressive splitting is optional — default chunking is usually fine.
+Import the main stylesheet from the JavaScript entry when the application has a single
+React entry:
 
-### Route-based code splitting (recommended)
-
-```ts
-// TanStack Router with autoCodeSplitting: true handles this automatically.
-// Each route file becomes a separate chunk loaded on navigation.
+```jsx
+// resources/js/app.jsx
+import "../sass/app.scss";
+import "bootstrap";
 ```
 
-### Build targets
+Laravel's official React setup places `laravel(...)` before `react()`. In Blade, include
+React Refresh before the entry:
 
-```ts
-build: {
-  target: "esnext",           // Modern browsers — safe for CF Workers proxy
-  // target: "es2020"         // If you need broader browser compat
-  // target: "baseline-widely-available"  // Vite 6 default (conservative)
-}
+```blade
+@viteReactRefresh
+@vite('resources/js/app.jsx')
 ```
 
-When assets are served from a modern CDN/edge to modern browsers, use `esnext` for smallest output.
+During development these directives point at the Vite dev server. After `npm run build`,
+`@vite` resolves the hashed JavaScript and imported CSS through Laravel's Vite manifest.
+Keep the Blade entry string identical to `laravel({ input: ... })`.
 
-### CSS code splitting
+`refresh: true` performs full-page refreshes for Laravel's default Blade, route, language,
+Livewire, and view-component paths. Use an explicit list such as
+`refresh: ["resources/views/**"]` only when the defaults are too broad.
 
-Vite automatically splits CSS per JS chunk (each async chunk gets its own CSS file). To disable:
+### Storefront SPA: Vite 8
 
-```ts
-build: { cssCodeSplit: false }  // Single CSS bundle (simpler, but no lazy loading)
-```
-
-### Bundle analysis
-
-```bash
-# Install once:
-npm install -D rollup-plugin-visualizer
-
-# Add to vite.config.ts plugins:
-visualizer({ open: true, filename: "dist/stats.html", gzipSize: true })
-
-# Build and open automatically:
-vite build
-```
-
-### Pre-bundling tuning (esbuild)
-
-Vite uses esbuild to pre-bundle dependencies before dev server starts. This converts CJS to ESM and reduces browser request count.
-
-```ts
-optimizeDeps: {
-  include: [
-    "react",
-    "react-dom",
-    // List packages that cause "new dependencies found" churn
-  ],
-  force: false,  // Set true temporarily to force re-bundle (then remove)
-}
-```
-
----
-
-## 6. Dev Server
-
-### Ports (multi-app monorepo example)
-
-| Hub | Web port | API port |
-|-----|----------|----------|
-| auth | 5173 | 8787 |
-| app | 5174 | 8788 |
-| backoffice | 5175 | 8789 |
-
-### Proxy configuration
-
-```ts
-server: {
-  port: 5174,
-  proxy: {
-    "/api": {
-      target: "http://localhost:8788",
-      changeOrigin: true,
-      // Do NOT use rewrite if the API is already mounted at /api/
-    },
-    // Multiple proxies:
-    "/health": { target: "http://localhost:8788", changeOrigin: true },
-  },
-},
-```
-
-**How it works:** In dev, the Vite frontend proxies `/api/*` to the local API. In production, the reverse proxy or platform routing handles API and SPA together (no Vite proxy).
-
-### HMR configuration
-
-```ts
-server: {
-  hmr: true,   // default — Fast Refresh via @vitejs/plugin-react
-  // If HMR isn't working behind a reverse proxy:
-  hmr: {
-    protocol: "ws",
-    host: "localhost",
-    port: 5174,
-  },
-  // Disable HMR entirely (fallback to full reload):
-  hmr: false,
-}
-```
-
-### CORS in dev
-
-```ts
-server: {
-  cors: true,  // Enable CORS for all origins in dev
-  // Or specific config:
-  cors: {
-    origin: ["http://localhost:5173", "http://localhost:5174"],
-  },
-}
-```
-
-### server.warmup (Vite 6)
-
-Pre-transform files before first request, reducing cold start:
-
-```ts
-server: {
-  warmup: {
-    clientFiles: [
-      "./src/main.tsx",
-      "./src/routes/__root.tsx",
-      "./src/routes/index.tsx",
-    ],
-  },
-}
-```
-
----
-
-## 7. Library Mode (packages/)
-
-For building `packages/ui` and `packages/auth` as distributable libraries:
-
-```ts
-// packages/ui/vite.config.ts
+```js
+// vite.config.js (storefront root)
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { resolve } from "node:path";
+import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   plugins: [react()],
-  build: {
-    lib: {
-      entry: resolve(import.meta.dirname, "src/index.ts"),
-      formats: ["es"],       // ESM only — modern consumers
-      fileName: "index",
-    },
-    rollupOptions: {
-      // Externalize deps — consumers install them separately
-      external: ["react", "react-dom", "react/jsx-runtime"],
-      output: {
-        preserveModules: true,      // Keep file structure (better tree-shaking)
-        preserveModulesRoot: "src",
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      "/graphql": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
       },
     },
-    sourcemap: true,
-    emptyOutDir: true,
+  },
+  build: {
+    sourcemap: "hidden",
   },
 });
 ```
 
-**Source-first monorepos:** Packages often export `src/index.ts` directly and Vite resolves TypeScript without building. Library mode is only needed if distributing to external consumers.
+The proxy is development-only. Production routing or `VITE_GRAPHQL_URL` determines the
+deployed BFF URL. Keep the proxy path unchanged when the BFF is already mounted at
+`/graphql`; add `rewrite` only when the upstream path is genuinely different.
 
----
+### Plugin ordering
 
-## 8. SSR / Cloudflare Workers Context
+`react()` provides JSX transformation and Fast Refresh. If another plugin transforms
+source before React, follow that plugin's documentation and prefer its `enforce: "pre"`
+contract; build/reporting plugins normally use `enforce: "post"`. Vite resolves plugins in
+`pre` → core → normal → build → `post` buckets, so array order alone does not override
+`enforce`. The Laravel integration remains `laravel(...), react()` as shown above.
 
-### Important distinction
+## 2. Sass / SCSS and Bootstrap
 
-In a typical split SPA + API setup, Vite only builds the **frontend SPA**. The API/worker (e.g. wrangler, NestJS, or another runtime) is built by its own toolchain, NOT by Vite.
+Vite handles `.scss` without a Vite-specific plugin, but Sass must be installed:
 
+```bash
+npm install -D sass-embedded
 ```
-Vite build output → apps/{app}/web/dist/   (SPA assets)
-API/worker build  → separate process         (NestJS, wrangler, etc.)
-Static hosting / reverse proxy serves web/dist/
-```
 
-### When Vite touches Workers code
+Prefer Sass modules in the main stylesheet:
 
-If you need to import Worker-specific types or APIs in a shared package that is also consumed by Vite:
+```scss
+// resources/sass/app.scss
+@use "./tokens" as tokens;
 
-```ts
-// vite.config.ts — tell Vite to use worker-compatible conditions
-resolve: {
-  conditions: ["workerd", "worker", "browser", "import", "default"],
+// Bootstrap 5.3's documented Sass entry still uses the legacy import form.
+@import "bootstrap/scss/bootstrap";
+
+.admin-shell {
+  color: tokens.$text-color;
 }
 ```
 
-### Externals for Worker builds (in wrangler/esbuild)
+Prefer `@use` for application partials and place it before `@import` or style rules. Bootstrap
+5.3 still documents `@import` for its Sass entry and partial customization. Use
+`css.preprocessorOptions.scss` for compiler options or small shared variable/mixin injections.
+If `additionalData` contains selectors or other emitted CSS, that CSS is repeated in every
+processed SCSS file. Aliases or absolute paths are safer than relative paths in injected content.
 
-This is NOT in vite.config.ts — it's in `wrangler.toml` or `tsconfig.json`. Vite doesn't build workers.
+Tailwind is optional, not the default styling path. If a separate app adopts Tailwind v4,
+install `tailwindcss` and `@tailwindcss/vite`, then add `tailwindcss()` to that app's plugins.
 
----
+## 3. Environment Variables and Modes
 
-## 9. Vitest Integration
+Only variables prefixed with `VITE_` are exposed to browser code. They are public after a
+build; never put credentials or server secrets in them.
 
-### Shared config pattern
+```js
+const endpoint = import.meta.env.VITE_GRAPHQL_URL;
+const mode = import.meta.env.MODE;
+const isDev = import.meta.env.DEV;
+const isProd = import.meta.env.PROD;
+const base = import.meta.env.BASE_URL;
+```
 
-```ts
-// packages/auth/vitest.config.ts
-import { defineConfig } from "vitest/config";  // NOT from "vite"
+Load order, highest priority first:
 
-export default defineConfig({
-  test: {
-    globals: true,          // describe/it/expect without imports
-    environment: "node",    // default — good for API/util tests
-  },
+```text
+.env.[mode].local
+.env.[mode]
+.env.local
+.env
+```
+
+Use `loadEnv` when non-`VITE_` values are needed while evaluating the config:
+
+```js
+import { defineConfig, loadEnv } from "vite";
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  return { server: { port: Number(env.DEV_PORT) || 5173 } };
 });
 ```
 
-```ts
-// packages/ui/vitest.config.ts
-import { defineConfig } from "vitest/config";
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: "jsdom",               // React component tests
-    setupFiles: ["./src/__tests__/setup.ts"],
-  },
-});
-```
-
-### Reusing vite.config.ts for Vitest
+Typing for TypeScript applications belongs in `src/vite-env.d.ts`:
 
 ```ts
-// apps/app/web/vitest.config.ts
-import { defineConfig, mergeConfig } from "vitest/config";
-import viteConfig from "./vite.config";
-
-export default mergeConfig(
-  viteConfig,
-  defineConfig({
-    test: {
-      globals: true,
-      environment: "jsdom",
-    },
-  }),
-);
+/// <reference types="vite/client" />
+interface ImportMetaEnv { readonly VITE_GRAPHQL_URL: string }
+interface ImportMeta { readonly env: ImportMetaEnv }
 ```
 
-### @cloudflare/vitest-pool-workers
+Vite also replaces `%VITE_APP_NAME%`-style placeholders in `index.html`. This applies to
+the storefront HTML, not to Blade templates.
 
-For testing CF Worker code (not applicable to the web SPA):
+## 4. Vite 6 vs Vite 8 Build Pipeline
 
-```ts
-// apps/auth/api/vitest.config.ts
-import { defineConfig } from "vitest/config";
+| Concern | Admin: Vite 6 | Storefront: Vite 8 |
+|---|---|---|
+| Dependency optimization | esbuild | Rolldown |
+| Production bundler | Rollup | Rolldown |
+| JS transform/minifier | esbuild; client minify default `esbuild` | Oxc; client minify default `oxc` |
+| CSS minifier default | esbuild | Lightning CSS |
+| Advanced build key | `build.rollupOptions` | `build.rolldownOptions` |
+| Optimizer-specific key | `optimizeDeps.esbuildOptions` | `optimizeDeps.rolldownOptions` |
+| Default browser target | `modules` | `baseline-widely-available` |
 
-export default defineConfig({
-  test: {
-    globals: true,
-    // No special pool needed for Hono tests — use app.request()
-    // @cloudflare/vitest-pool-workers is for direct Worker execution tests
-  },
-});
+Vite 8 accepts some Vite 6 keys through compatibility aliases, but they are migration
+inputs, not new-config defaults. Never copy `rolldownOptions`, Oxc minifier settings, or
+Rolldown `codeSplitting` into the Vite 6 admin config.
+
+Generic build options work in both versions:
+
+```js
+build: {
+  target: "es2020",       // Pin only when browser support must not drift.
+  sourcemap: "hidden",    // External maps without sourceMappingURL comments.
+  cssCodeSplit: true,
+  minify: true,            // Uses the version's default minifier.
+}
 ```
 
-See full patterns in [vitest-workers.md](references/vitest-workers.md).
+### Code splitting
 
----
+Prefer dynamic imports and React Router lazy route modules before manual vendor groups:
 
-## 10. Tailwind v4 Integration
-
-### @tailwindcss/vite vs PostCSS
-
-| Approach | When | How |
-|----------|------|-----|
-| `@tailwindcss/vite` plugin | Tailwind v4 + Vite | `import tailwindcss from "@tailwindcss/vite"` → add to plugins |
-| PostCSS (`postcss.config.js`) | Tailwind v3 or non-Vite tools | `@tailwindcss/postcss` in postcss plugins |
-
-**Use `@tailwindcss/vite`.** Do NOT create a `postcss.config.js` — Tailwind v4 + Vite plugin bypasses PostCSS entirely.
-
-### CSS import in entry point
-
-```tsx
-// apps/app/web/src/main.tsx
-import "./index.css";  // Must import the CSS file that contains @import "tailwindcss"
+```js
+const routes = [
+  { path: "/products", lazy: () => import("./routes/products.jsx") },
+];
 ```
 
-```css
-/* apps/app/web/src/index.css */
-@import "tailwindcss";
-@import "@acme/design-tokens/src/themes/app.css";  /* Hub theme tokens */
-```
+Vite 8 / Rolldown-only grouping:
 
-### CSS processing order
-
-Vite processes CSS in this order:
-1. `@tailwindcss/vite` plugin transforms Tailwind directives
-2. CSS modules (`.module.css`) are scoped
-3. Regular CSS is bundled and minified
-
----
-
-## 11. Vite 6.x Features
-
-### Environment API
-
-Vite 6 formalizes multiple runtime environments (client, server, edge):
-
-```ts
-export default defineConfig({
-  environments: {
-    client: {
-      // SPA config (browser)
-    },
-    edge: {
-      resolve: { noExternal: true },  // Bundle all deps for edge runtime
-      build: { outDir: "dist/edge" },
+```js
+build: {
+  rolldownOptions: {
+    output: {
+      codeSplitting: {
+        groups: [
+          { name: "react-vendor", test: /node_modules[\\/](?:react|react-dom)[\\/]/, priority: 20 },
+          { name: "router-vendor", test: /node_modules[\\/]react-router(?:-dom)?[\\/]/, priority: 15 },
+        ],
+      },
     },
   },
-});
+}
 ```
 
-The Environment API is primarily relevant when using multi-runtime plugins (e.g. edge). A typical SPA setup does NOT need explicit environment config.
+Vite 6 equivalent:
 
-### Module Runner API
+```js
+build: {
+  rollupOptions: {
+    output: {
+      manualChunks: {
+        "react-vendor": ["react", "react-dom"],
+        "router-vendor": ["react-router-dom"],
+      },
+    },
+  },
+}
+```
 
-New in Vite 6 — replaces `ssrLoadModule`. Used by framework authors, not application developers. Not relevant to typical app setups.
+Default chunking is usually sufficient. Add groups only after bundle analysis shows a
+caching or loading problem. See [references/build-optimization.md](references/build-optimization.md).
 
-### server.warmup (Vite 5.1+)
+## 5. Dependency Optimization
 
-Pre-transforms critical files before the first browser request:
+`include` and `exclude` are valid in both versions:
 
-```ts
+```js
+optimizeDeps: {
+  include: ["react", "react-dom", "react-router-dom"],
+  // exclude: ["already-clean-esm-package"],
+  force: false,
+}
+```
+
+Add `include` when runtime discovery causes repeated “new dependencies found” restarts or
+when a CommonJS dependency needs eager conversion. Use `npm run dev -- --force` once to
+rebuild the optimizer cache. Put low-level optimizer settings under
+`esbuildOptions` on Vite 6 and `rolldownOptions` on Vite 8.
+
+## 6. Dev Server, Proxy, and HMR
+
+Run each app from its own root. Use distinct ports only if both dev servers run together:
+
+```bash
+npm install
+npm run dev
+npm run build
+npm run preview # only if this app defines a preview script
+```
+
+The Laravel admin is normally opened through the Laravel URL so Blade can emit the Vite
+tags; do not use the Vite server as the application origin. The standalone storefront is
+opened directly through its Vite dev server.
+
+React Fast Refresh works when `react()` is installed and loaded. Behind a reverse proxy:
+
+```js
 server: {
-  warmup: {
-    clientFiles: ["./src/main.tsx"],
+  hmr: { protocol: "ws", host: "localhost", clientPort: 5173 },
+}
+```
+
+Prefer an explicit `server.cors.origin` allowlist over `cors: true` when the dev server is
+reachable by other machines. `server.warmup.clientFiles` may pre-transform hot paths in
+either app; use real entry/route paths from that app.
+
+## 7. Library Mode
+
+Library mode is independent of the two application builds, but remains useful for a
+separately published package:
+
+```js
+// Vite 8
+import { fileURLToPath, URL } from "node:url";
+
+build: {
+  lib: {
+    entry: fileURLToPath(new URL("./src/index.js", import.meta.url)),
+    formats: ["es"],
   },
+  rolldownOptions: {
+    external: ["react", "react-dom", "react/jsx-runtime"],
+  },
+  sourcemap: true,
 }
 ```
 
----
+For Vite 6, keep `build.lib` but replace `rolldownOptions` with `rollupOptions`. Externalize
+peer dependencies so consumers provide their own React instance.
 
-## 12. Vite 8 (Rolldown) — What Changed
+## 8. Vitest Integration
 
-**Vite 8.0 (GA 2026-06-23) merged `rolldown-vite` into the core `vite` package** — Rolldown
-(Rust-based bundler) is now the single, unified bundler for both dev pre-bundling AND
-production builds, replacing the old esbuild (pre-bundle) + Rollup (build) split. Vercel/Vite
-team reports 10-30x faster builds. Verified 2026-07-15 via Context7 `/vitejs/vite` changelog +
-migration guide.
+Keep one test config per app:
 
-**Breaking changes (per official changelog, 3 items):**
+```js
+// vitest.config.js
+import { defineConfig, mergeConfig } from "vitest/config";
+import viteConfig from "./vite.config.js";
 
-1. **`optimizeDeps.esbuildOptions` → `optimizeDeps.rolldownOptions`** — dependency pre-bundling
-   now uses Rolldown instead of esbuild. `esbuildOptions` still works (auto-converted field by
-   field) but is deprecated:
-   ```ts
-   // Deprecated (still works via compat shim):
-   optimizeDeps: { esbuildOptions: { define: { ... } } }
-
-   // Preferred (Vite 8+):
-   optimizeDeps: { rolldownOptions: { transform: { define: { ... } } } }
-   ```
-2. **`import.meta.hot.accept` resolution fallback removed** — if HMR accept callbacks relied on
-   implicit module resolution, they now need an explicit path.
-3. **Default browser build target updated** — check `build.target` if you support older
-   browsers; don't assume the previous "Baseline Widely Available" default is unchanged.
-
-**Also from the migration guide (not flagged as "breaking" but behavior-affecting):**
-
-- **`define` no longer shares object references** — each variable using the same object value in
-  `define` now gets its own copy (Oxc transformer behavior). Rarely matters unless code mutates
-  a `define`d object at runtime (unusual pattern).
-- **`build.rollupOptions` still works** via an automatic compat layer that converts it to
-  Rolldown equivalents — **most projects need zero config changes**. `build.commonjsOptions` is
-  now a no-op (Rolldown handles CJS natively, no separate plugin needed).
-
-**Migration path for larger/complex projects:** try the `rolldown-vite` package as a drop-in on
-Vite 7 first to isolate Rolldown-specific issues from other Vite 8 changes, then upgrade to
-`vite@8`. For a typical stack (React + TanStack Router + Tailwind v4 + static assets), the
-plugin chain (`@tanstack/router-plugin`, `@vitejs/plugin-react`, `@tailwindcss/vite`) is
-confirmed compatible — no known Rolldown-specific breakage as of 2026-07-15.
-
----
-
-## 13. Troubleshooting
-
-### HMR not working
-
-1. Check browser console for WebSocket errors
-2. Ensure dev server port is accessible (no firewall/VPN blocking WS)
-3. If behind nginx/proxy: configure `server.hmr.clientPort`
-4. Check `@vitejs/plugin-react` is in plugins (required for React Fast Refresh)
-
-### "Failed to resolve import X from Y"
-
-1. Is X installed? `npm install X`
-2. Is X a workspace package? Check `packages/X/package.json#exports` field
-3. Does X need to be in `optimizeDeps.include`?
-4. Check `resolve.alias` if using path aliases
-
-### CJS/ESM conflicts ("require is not defined in ES module scope")
-
-```ts
-// In vite.config.ts:
-optimizeDeps: {
-  include: ["problematic-cjs-package"],  // Force Vite to pre-bundle it as ESM
-}
+export default mergeConfig(viteConfig, defineConfig({
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.js"],
+  },
+}));
 ```
 
-### "New dependencies found, optimizing..."
+Use paths appropriate to each app (`resources/js/...` in the admin, `src/...` in the
+storefront). Keep Vitest and Vite versions compatible with that app's installed major.
 
-Vite re-runs pre-bundling when it discovers new deps at runtime. To prevent:
+## 9. Troubleshooting
 
-```ts
-optimizeDeps: {
-  include: ["all-deps-you-use"],  // Pre-declare them
-}
-```
+- **HMR fails:** inspect browser WebSocket errors; verify the correct app/port and `react()`;
+  behind a proxy, set `server.hmr.clientPort`. Laravel Blade changes are full reloads from
+  `refresh`, while React module changes use Fast Refresh.
+- **Import cannot resolve:** confirm the package is installed in this app, inspect its exports,
+  then check the app-local alias. There are no workspace-package fallbacks.
+- **Optimizer loops:** add the discovered dependency to `optimizeDeps.include`, then force one
+  cache rebuild.
+- **CJS/ESM error:** include the problematic CommonJS package in dependency optimization.
+- **Wrong chunk sizes:** use a bundle visualizer, then lazy-load routes or add the
+  version-correct chunk configuration.
+- **SCSS fails:** install `sass-embedded` (or `sass`), keep `@use` before style rules, and avoid
+  fragile relative paths in `additionalData`.
+- **Laravel asset 404:** make `laravel({ input })` and Blade `@vite(...)` identical, ensure the
+  Vite dev server is running in development, or rebuild the production manifest.
 
-Or run `vite --force` once to clear the cache, then restart.
-
-### Build produces wrong chunk sizes
-
-Use `rollup-plugin-visualizer` to inspect what's in each chunk. Large chunks usually mean:
-- Not externalizing deps in library mode
-- Missing `manualChunks` for vendor code
-- A single large import that should be lazy-loaded
-
-### TypeScript errors in vite.config.ts
-
-```ts
-// If import.meta.dirname is unavailable (Node < 20):
-import { fileURLToPath } from "node:url";
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
-```
-
-### Tailwind classes not applied
-
-1. Confirm `@tailwindcss/vite` is in plugins (NOT `@tailwindcss/postcss` in postcss.config.js)
-2. Confirm CSS file is imported in `main.tsx` (not just in a component)
-3. Confirm `@import "tailwindcss"` is in your root CSS file
-4. Check that `tailwindcss` and `@tailwindcss/vite` versions match (both should be `^4.x`)
-
----
-
-## Quick Reference
-
-### Plugin install commands
-
-```bash
-npm install -D @vitejs/plugin-react
-npm install -D @tailwindcss/vite tailwindcss
-npm install -D @tanstack/router-plugin
-npm install -D vite-plugin-svgr
-npm install -D rollup-plugin-visualizer    # bundle analysis
-```
-
-### Useful CLI flags
-
-```bash
-vite                      # Start dev server
-vite build                # Production build
-vite build --mode staging # Use .env.staging
-vite preview              # Preview built output locally
-vite --force              # Force re-optimization of deps (clear cache)
-vite build --sourcemap    # Build with sourcemaps
-```
-
-### Vite config options reference (6.x–8.x, largely unchanged — see ## 12 for the Vite 8 delta)
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `root` | `process.cwd()` | Project root (where index.html is) |
-| `base` | `/` | Base public path |
-| `mode` | `development`/`production` | Build mode |
-| `build.target` | Baseline Widely Available | Browser/runtime target |
-| `build.outDir` | `dist` | Output directory |
-| `build.minify` | `esbuild` | Minifier (esbuild or terser) |
-| `build.sourcemap` | `false` | Source maps |
-| `build.cssCodeSplit` | `true` | CSS code splitting |
-| `server.port` | `5173` | Dev server port |
-| `server.open` | `false` | Open browser on start |
-| `optimizeDeps.force` | `false` | Force re-bundle deps |
-
----
+The Environment API, Module Runner API, SSR, and other deployment targets such as edge
+static hosting are advanced concerns; neither default application needs them.
 
 ## References
 
 | Topic | File |
-|-------|------|
-| Plugin API (custom plugins, virtual modules, HMR) | [references/plugin-api.md](references/plugin-api.md) |
-| Vitest + CF Workers pool | [references/vitest-workers.md](references/vitest-workers.md) |
-| Build optimization deep-dive | [references/build-optimization.md](references/build-optimization.md) |
-| Research sources | [references/sources.md](references/sources.md) |
+|---|---|
+| Custom plugins, ordering, virtual modules, HMR | [references/plugin-api.md](references/plugin-api.md) |
+| Version-aware build optimization | [references/build-optimization.md](references/build-optimization.md) |
+| Official sources and verification log | [references/sources.md](references/sources.md) |
+
+<!-- Origin: https://vite.dev/guide/, https://v6.vite.dev/guide/, https://laravel.com/docs/11.x/vite | Inspiration: https://sass-lang.com/documentation/at-rules/use/ -->

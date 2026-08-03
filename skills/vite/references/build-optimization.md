@@ -1,223 +1,208 @@
 ---
 name: vite-build-optimization
-description: Deep-dive into Vite build optimization — chunks, analysis, caching, targets
+description: Version-aware Vite 6 and Vite 8 build optimization, chunks, targets, minification, and analysis
 ---
 
-# Build Optimization Deep-Dive
+# Build Optimization Deep Dive
 
-## Understanding the Build Pipeline
+Use the configuration branch that matches the app's installed Vite major.
 
-```
-Source files (TS/TSX/CSS)
-  ↓ esbuild (dev: pre-bundling, build: TS/JSX transform)
-  ↓ Rollup (build: tree-shaking, code-splitting, bundling)
-  ↓ esbuild (build: minification, unless terser is configured)
-  → dist/ (HTML + JS chunks + CSS + assets)
-```
+| Stage | Vite 6 | Vite 8 |
+|---|---|---|
+| Dependency optimization | esbuild | Rolldown |
+| JavaScript/TypeScript transform | esbuild | Oxc |
+| Production bundle | Rollup | Rolldown |
+| Client JS minification | esbuild by default | Oxc by default |
+| CSS minification | esbuild by default | Lightning CSS by default |
 
-## Rollup Options
+## Advanced Bundler Options
 
-Most build optimization lives in `build.rollupOptions`:
+Vite 8 uses `build.rolldownOptions`:
 
-```ts
+```js
 build: {
-  rollupOptions: {
-    // Input overrides (usually not needed — Vite uses index.html)
-    input: "src/main.tsx",
-
+  rolldownOptions: {
     output: {
-      // Chunk naming pattern:
       chunkFileNames: "assets/[name]-[hash].js",
       entryFileNames: "assets/[name]-[hash].js",
       assetFileNames: "assets/[name]-[hash][extname]",
-      
-      // Vendor chunk splitting:
-      manualChunks(id) {
-        if (id.includes("node_modules/react")) return "react-vendor";
-        if (id.includes("node_modules/@tanstack")) return "tanstack-vendor";
-        if (id.includes("node_modules/@trpc")) return "trpc-vendor";
+      codeSplitting: {
+        groups: [
+          { name: "react-vendor", test: /node_modules[\\/](?:react|react-dom)[\\/]/, priority: 20 },
+          { name: "router-vendor", test: /node_modules[\\/]react-router(?:-dom)?[\\/]/, priority: 15 },
+          { name: "vendor", test: /node_modules/, priority: 10 },
+        ],
       },
     },
-    
-    // External packages (library mode only):
-    external: ["react", "react-dom"],
   },
 }
 ```
 
-## manualChunks Strategies
+Vite 6 uses `build.rollupOptions` and Rollup `manualChunks`:
 
-### Object form (static, predictable)
-
-```ts
-output: {
-  manualChunks: {
-    "react-vendor": ["react", "react-dom", "react/jsx-runtime"],
-    "router": ["@tanstack/react-router", "@tanstack/react-query"],
-    "trpc": ["@trpc/client", "@trpc/tanstack-react-query"],
-    "icons": ["lucide-react"],
+```js
+build: {
+  rollupOptions: {
+    output: {
+      chunkFileNames: "assets/[name]-[hash].js",
+      entryFileNames: "assets/[name]-[hash].js",
+      assetFileNames: "assets/[name]-[hash][extname]",
+      manualChunks: {
+        "react-vendor": ["react", "react-dom"],
+        "router-vendor": ["react-router-dom"],
+      },
+    },
   },
 }
 ```
 
-Best for: stable deps with known module IDs.
+Do not override Vite's input in the Laravel admin. `laravel-vite-plugin` derives the build
+input and manifest behavior from its `input` option. A standalone SPA normally uses
+`index.html` as its entry.
 
-### Function form (dynamic, flexible)
+## Splitting Strategy
 
-```ts
-output: {
-  manualChunks(id) {
-    // All node_modules → single vendor chunk:
-    if (id.includes("node_modules")) return "vendor";
-    
-    // Route-based splitting (if not using TanStack Router auto-split):
-    if (id.includes("/src/routes/")) {
-      const segment = id.split("/src/routes/")[1].split("/")[0];
-      return `route-${segment}`;
-    }
-  },
-}
+Start with application-level lazy imports. For React Router route objects:
+
+```js
+const routes = [
+  { path: "/account", lazy: () => import("./routes/account.jsx") },
+  { path: "/orders", lazy: () => import("./routes/orders.jsx") },
+];
 ```
+
+Add manual vendor groups only when measurement shows that they improve caching or load
+behavior. Broad vendor chunks can delay first render, and many tiny chunks increase request
+overhead. Prefer stable dependency boundaries over arbitrary size-only splitting.
 
 ## Bundle Analysis
 
-### rollup-plugin-visualizer
+```bash
+npm install -D rollup-plugin-visualizer
+```
 
-```ts
-// vite.config.ts
+```js
 import { visualizer } from "rollup-plugin-visualizer";
 
 export default defineConfig({
   plugins: [
-    // ... other plugins
-    process.env.ANALYZE &&
-      visualizer({
-        open: true,
-        filename: "dist/stats.html",
-        gzipSize: true,
-        brotliSize: true,
-        template: "treemap",  // treemap | sunburst | network
-      }),
+    // Existing app plugins first.
+    process.env.ANALYZE && visualizer({
+      open: true,
+      filename: "dist/stats.html",
+      gzipSize: true,
+      brotliSize: true,
+      template: "treemap",
+    }),
   ].filter(Boolean),
 });
 ```
 
 ```bash
-# Run analysis build:
 ANALYZE=true npm run build
 ```
 
-### Reading the output
+Interpret the report before changing config:
 
-- **Large vendor chunks** → consider splitting or lazy-loading
-- **Duplicated modules** (same package in multiple chunks) → move to manualChunks
-- **Small chunks** (< 5KB) → might be better merged to reduce requests
+- Large initial chunks: lazy-load routes or features.
+- Duplicate dependencies: inspect dependency versions and resolution before grouping.
+- Large stable dependencies: consider a dedicated cached group.
+- Many very small chunks: remove over-aggressive groups.
+
+For the Laravel admin, set the visualizer filename inside the actual build directory if it
+differs from `dist`; the Laravel plugin commonly owns that output layout.
 
 ## Build Targets
 
-```ts
+The defaults differ and may change with major releases:
+
+```js
 build: {
-  // Modern (our CF Workers + SPA use case):
-  target: "esnext",
-
-  // Specific browsers (e.g., client requirement):
-  target: ["chrome90", "firefox88", "safari14"],
-
-  // Vite 6 default (conservative, safe for ~2 year old browsers):
-  target: "baseline-widely-available",
-
-  // ES2020 (includes dynamic import, optional chaining, nullish coalescing):
   target: "es2020",
+  // target: "esnext", // Controlled modern browsers; minimal lowering.
 }
 ```
 
-For CF Workers Static Assets → always use `esnext` (assets served by browser, not Worker).
+- Vite 6 default: `modules`, mapped to browsers supporting native ESM, dynamic import, and
+  `import.meta`.
+- Vite 8 default: `baseline-widely-available` using the baseline documented for that release.
+- Pin a target only when browser support is a product requirement; otherwise use the
+  version's tested default.
 
-## Minification Options
+## Minification
 
-```ts
+Use the default unless measurements justify a different minifier:
+
+```js
 build: {
-  minify: "esbuild",    // Default, fastest (~10x faster than terser)
-  minify: "terser",     // Smaller output, much slower build
-  minify: false,        // No minification (dev/debug)
-  
-  // esbuild options:
-  esbuild: {
-    drop: ["console", "debugger"],  // Remove console.log in production
-    legalComments: "none",
-  },
+  minify: true,
+  // minify: false,       // Diagnostic build.
+  // minify: "terser",    // Requires installing terser.
 }
 ```
+
+Version-specific values:
+
+- Vite 6: `minify: "esbuild"` is the client default; SSR defaults to `false`.
+- Vite 8: `minify: "oxc"` is the client default; SSR defaults to `false`.
+- Vite 8 advanced Oxc compression belongs under
+  `build.rolldownOptions.output.minify`, not Vite 6's `esbuild` config.
 
 ## Source Maps
 
-```ts
+```js
 build: {
-  sourcemap: true,        // Inline source maps (large output)
-  sourcemap: "inline",    // Same as true
-  sourcemap: "hidden",    // External .js.map files (not referenced in JS) → Sentry
-  sourcemap: false,       // No source maps (default)
+  sourcemap: false,      // Default.
+  // sourcemap: true,     // External map referenced from output.
+  // sourcemap: "inline", // Map embedded in output.
+  // sourcemap: "hidden", // External map without sourceMappingURL comment.
 }
 ```
 
-**For Sentry:** Use `sourcemap: "hidden"` + Sentry Vite plugin to upload maps without exposing them publicly.
+Use `hidden` when an error-monitoring service uploads maps but public assets should not
+advertise their URLs.
 
-## CSS Optimization
+## CSS and Assets
 
-```ts
+```js
 build: {
-  cssCodeSplit: true,     // Default — CSS per chunk (lazy loading)
-  cssCodeSplit: false,    // Single CSS bundle
-  cssMinify: true,        // Default — minify CSS
-  cssTarget: "esnext",   // CSS syntax target (for browser compat)
+  cssCodeSplit: true,
+  assetsInlineLimit: 4096,
+  // cssTarget: "chrome90", // Only for a specific compatibility need.
 }
 ```
 
-## Asset Inlining
+- `cssCodeSplit: true` keeps CSS associated with async JavaScript chunks; `false` emits one
+  CSS bundle.
+- `assetsInlineLimit: 0` disables base64 inlining; the default is 4 KiB.
+- Vite 6 uses esbuild for CSS minification by default and supports opting into
+  `cssMinify: "lightningcss"`.
+- Vite 8 uses `cssMinify: "lightningcss"` by default; setting `"esbuild"` requires esbuild.
+- Sass processing occurs before CSS minification. Configure Sass under
+  `css.preprocessorOptions.scss`, not under `build`.
 
-```ts
+## Warnings and Preload
+
+For a legitimate large chunk, first split by route or feature. Raise
+`build.chunkSizeWarningLimit` only after confirming the chunk cannot be split usefully.
+
+Vite generates module-preload links for critical chunks. Disable them only for a measured
+compatibility or delivery reason:
+
+```js
 build: {
-  assetsInlineLimit: 4096,   // Default 4KB — files smaller than this become base64
-  assetsInlineLimit: 0,      // Never inline (always separate files)
+  modulePreload: false,
+  // modulePreload: { polyfill: true },
 }
 ```
 
-## Build Warnings
+Avoid suppressing bundler warnings globally. If a known dependency emits an unavoidable
+warning, filter that exact warning code and preserve all others using the warning hook
+documented for that app's bundler version.
 
-### "Some chunks are larger than 500 kB after minification"
+## Official Sources
 
-Add `manualChunks` or enable `autoCodeSplitting` in TanStack Router.
-
-```ts
-build: {
-  chunkSizeWarningLimit: 1000,  // Raise threshold if split isn't practical
-}
-```
-
-### "Use of eval is strongly discouraged"
-
-```ts
-build: {
-  rollupOptions: {
-    onwarn(warning, warn) {
-      if (warning.code === "EVAL") return;  // Suppress for known deps
-      warn(warning);
-    },
-  },
-}
-```
-
-## Preload Directives
-
-Vite automatically generates `<link rel="modulepreload">` for critical chunks. Disable if needed:
-
-```ts
-build: {
-  modulePreload: false,  // Disable preload generation
-  modulePreload: {
-    polyfill: true,  // Include modulepreload polyfill for older browsers
-  },
-}
-```
-
-## Source: https://vite.dev/guide/build, https://vite.dev/config/build-options
+- https://v6.vite.dev/config/build-options
+- https://vite.dev/config/build-options
+- https://vite.dev/guide/build
+- https://rolldown.rs/reference/OutputOptions.codeSplitting
