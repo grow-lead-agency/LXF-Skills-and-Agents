@@ -391,4 +391,9 @@ static hosting are advanced concerns; neither default application needs them.
 | Version-aware build optimization | [references/build-optimization.md](references/build-optimization.md) |
 | Official sources and verification log | [references/sources.md](references/sources.md) |
 
-<!-- Origin: https://vite.dev/guide/, https://v6.vite.dev/guide/, https://laravel.com/docs/11.x/vite | Inspiration: https://sass-lang.com/documentation/at-rules/use/ -->
+## Sources
+
+- Vite guide (v8) — https://vite.dev/guide/
+- Vite 6 guide (the admin app's version) — https://v6.vite.dev/guide/
+- Laravel 11 Vite integration — https://laravel.com/docs/11.x/vite
+- Sass `@use` — https://sass-lang.com/documentation/at-rules/use/
