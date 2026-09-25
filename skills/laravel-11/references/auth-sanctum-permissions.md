@@ -5,8 +5,8 @@ roles/permissions, or authorization checks (policies, Blade, React-facing endpoi
 
 ## Sanctum 4 — API token auth
 
-The datamixer API (`/api/v1`) is consumed by the BFF using bearer tokens
-(`DATAMIXER_API_KEY` on the BFF side). Sanctum stores tokens hashed in
+The platform API (`/api/v1`) is consumed by the BFF using bearer tokens
+(`UPSTREAM_API_KEY` on the BFF side). Sanctum stores tokens hashed in
 `personal_access_tokens`; the plain text is shown **once** at creation.
 
 ### Issuing tokens

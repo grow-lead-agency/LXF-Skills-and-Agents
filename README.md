@@ -1,7 +1,7 @@
 # LXF-Skills-and-Agents — Agent Skills for your platform
 
-Claude Code plugin with agent skills tailored to the datamixer platform stack:
-**Laravel 11** (PHP 8.4, MySQL 8, Sanctum, spatie/laravel-permission, Pusher broadcasting,
+Claude Code plugin with agent skills tailored to a Laravel ERP + NestJS BFF + React storefront stack:
+**Laravel 11, with an upgrade path to 13** (PHP 8.4, MySQL 8, Sanctum, spatie/laravel-permission, Pusher broadcasting,
 Deployer, KSeF e-invoicing) + **NestJS 11 GraphQL BFF** + **React 19 storefront**.
 
 Skills teach the AI agent *your* stack's conventions and gotchas so it writes code that
@@ -15,11 +15,16 @@ recommended process skills, Context7, and agent context for the platform repo.
 
 ## Install
 
-As a plugin (recommended — one command, easy updates):
+As a Claude Code plugin (recommended — two commands, easy updates):
 
 ```bash
-claude plugin install https://github.com/grow-lead-agency/LXF-Skills-and-Agents
+claude plugin marketplace add grow-lead-agency/LXF-Skills-and-Agents
+claude plugin install lxf-skills-and-agents@lxf-skills
 ```
+
+Inside a Claude Code session the same works as `/plugin marketplace add grow-lead-agency/LXF-Skills-and-Agents`
+and `/plugin install lxf-skills-and-agents@lxf-skills`. Update later with
+`claude plugin marketplace update lxf-skills` (or `/plugin` → Marketplaces → Update).
 
 Or manually — copy any `skills/<name>/` directory into your repo's `.claude/skills/`
 (project-scoped) or `~/.claude/skills/` (user-scoped).
@@ -38,6 +43,10 @@ Or manually — copy any `skills/<name>/` directory into your repo's `.claude/sk
 | `laravel-file-transfer` | Feed/document transfer over SFTP (league/flysystem-sftp-v3) — streaming large files, atomic delivery, idempotent imports, queued jobs with locks |
 | `react-router-7` | Storefront routing — createBrowserRouter, nested layouts, loaders with AbortSignal, lazy routes, error boundaries, auth gating, memory-router tests |
 | `react-dnd` | Admin drag & drop — useDrag/useDrop, sortable reordering, optimistic persist to the API, custom drag layers, a11y limits and keyboard fallback |
+| `laravel-upgrade` | Laravel 11 → 12 → 13 step by step (one major per PR, green CI first): breaking changes with grep recipes, package compatibility matrix (spatie/permission 7/8, PHPUnit 12/13, Guzzle 8, Excel, debugbar), verification checklist, rollback |
+| `laravel-security` | 57 Laravel-specific security rules in 10 categories from a real ERP audit: route exposure, authorization and Policies, tokens in links, signed webhooks, multi-step public forms, escaping and PDFs, files and disks, session/cookies incl. iframe flows, deploy hygiene, concurrency and idempotency; audit checklist + Semgrep rules |
+| `laravel-ci-github` | Turnkey GitHub Actions CI/CD for a Laravel + MySQL app with no CI today: Pint, Larastan baseline, composer audit, gitleaks, PHPUnit on MySQL over a schema dump, artifact deploy with Deployer, backup before migrate, smoke test and rollback; safe DB change process and staging |
+| `shoptet-api-integration` | ERP ↔ Shoptet backend integration: webhook signature (HMAC-SHA1), retries and idempotency, re-verifying deletes, Private API limits, async jobs, batch JSONL, order batch insertion, snapshots, integration pitfalls |
 
 ### General stack skills
 

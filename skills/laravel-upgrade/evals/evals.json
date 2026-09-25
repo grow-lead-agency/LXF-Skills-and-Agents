@@ -1,0 +1,12 @@
+[
+  {"id": 1, "query": "Laravel 11 už nemá bezpečnostní podporu, potřebuju naplánovat upgrade našeho ERP na Laravel 13, jak postupovat krok po kroku?", "should_trigger": true},
+  {"id": 2, "query": "composer update fails when I bump laravel/framework to ^12.0, it says spatie/laravel-permission and milon/barcode conflict. How do I find what blocks the upgrade?", "should_trigger": true},
+  {"id": 3, "query": "Co se rozbije při přechodu z Laravel 12 na 13? Máme MySQL, Blade, laravel/ui a Sanctum, a v routes máme withoutMiddleware(ValidateCsrfToken::class).", "should_trigger": true},
+  {"id": 4, "query": "Should I use Laravel Shift or the Boost /upgrade-laravel-v13 command to upgrade our app from 12 to 13, and what do I still need to verify manually?", "should_trigger": true},
+  {"id": 5, "query": "po upgradu na L13 se všichni uživatelé odhlásili a cache vrací __PHP_Incomplete_Class, co jsme udělali špatně a jak to rollbacknout?", "should_trigger": true},
+  {"id": 6, "query": "We are moving the Laravel app to PHPUnit 12 as part of the framework upgrade, 7 test files still use @test and @dataProvider docblocks. What's the order of steps?", "should_trigger": true},
+  {"id": 7, "query": "Napiš mi Form Request pro vytvoření objednávky v Laravel 11 s validací položek a eager loadingem zákazníka.", "should_trigger": false},
+  {"id": 8, "query": "Set up a GitHub Actions workflow for our Laravel app with a MySQL 8 service container, Pint and PHPUnit.", "should_trigger": false},
+  {"id": 9, "query": "Proveď bezpečnostní audit Laravel aplikace: mass assignment, SQL injection v raw queries, Sanctum tokeny a CSRF výjimky.", "should_trigger": false},
+  {"id": 10, "query": "Potřebujeme upgradovat Sconto Shopsys z v15 na v19, jak na to s Symfony 6.4?", "should_trigger": false}
+]

@@ -1,0 +1,175 @@
+# Custom Semgrep rules for Laravel security patterns (laravel-security skill).
+# Run: semgrep --config references/semgrep-rules.yml app/ routes/ resources/views/ config/
+# Validated with `semgrep --validate` and a fixture on 2026-09-25.
+rules:
+  - id: laravel-hardcoded-token-comparison
+    languages: [php]
+    severity: ERROR
+    message: >-
+      Token-like value compared with a string literal. Hardcoded bypass values ('debug', '666', '')
+      turn every customer link into a universal key. Compare against the stored secret with hash_equals().
+    patterns:
+      - pattern-either:
+          - pattern: $T == "..."
+          - pattern: $T != "..."
+          - pattern: $T === "..."
+          - pattern: $T !== "..."
+          - pattern: '"..." == $T'
+          - pattern: '"..." != $T'
+          - pattern: '"..." === $T'
+          - pattern: '"..." !== $T'
+      - metavariable-regex:
+          metavariable: $T
+          regex: (?i).*(token|check|secret|hash|signature|apikey|api_key).*
+
+  - id: laravel-non-constant-time-secret-compare
+    languages: [php]
+    severity: WARNING
+    message: Secret from a request header compared with ==/!=/===/!==. Use hash_equals($expected, $given) and fail closed on empty config.
+    pattern-either:
+      - pattern: $R->header(...) == $X
+      - pattern: $R->header(...) != $X
+      - pattern: $R->header(...) === $X
+      - pattern: $R->header(...) !== $X
+      - pattern: $X == $R->header(...)
+      - pattern: $X != $R->header(...)
+      - pattern: $X === $R->header(...)
+      - pattern: $X !== $R->header(...)
+
+  - id: laravel-hardcoded-user-id-allowlist
+    languages: [php]
+    severity: WARNING
+    message: Authorization by hardcoded user IDs. Model it as a permission (spatie/laravel-permission) so offboarding and audit work.
+    pattern-either:
+      - pattern: in_array(Auth::id(), [...], ...)
+      - pattern: in_array(auth()->id(), [...], ...)
+      - pattern: in_array($U->id, [$N, ...], ...)
+      - pattern: Auth::id() === $N
+      - pattern: auth()->id() === $N
+      - pattern: Auth::id() == $N
+      - pattern: auth()->id() == $N
+
+  - id: laravel-without-middleware
+    languages: [php]
+    severity: WARNING
+    message: withoutMiddleware() removes a check from every nested route. Needs a comment, a narrow scope and coverage in RouteSecurityTest.
+    pattern-either:
+      - pattern: $X->withoutMiddleware(...)
+      - pattern: Route::withoutMiddleware(...)
+
+  - id: laravel-mass-assignment-request-all
+    languages: [php]
+    severity: WARNING
+    message: Writing $request->all() lets the client set any fillable column (owner, created_by, document ids). Use $request->validated() or safe()->only([...]).
+    pattern-either:
+      - pattern: $M->update($R->all())
+      - pattern: $M->fill($R->all())
+      - pattern: $C::create($R->all())
+      - pattern: $M->forceFill($R->all())
+
+  - id: laravel-debug-output
+    languages: [php]
+    severity: ERROR
+    message: Debug output must not ship (prints internals, on public routes to anonymous users).
+    pattern-either:
+      - pattern: dd(...)
+      - pattern: dump(...)
+      - pattern: var_dump(...)
+      - pattern: phpinfo(...)
+      - pattern: $X->dd()
+      - pattern: $X->dump()
+
+  - id: laravel-log-request-payload
+    languages: [php]
+    severity: WARNING
+    message: Logging the full request or payload writes personal data (names, addresses, IBANs) to logs. Log IDs only.
+    pattern-either:
+      - pattern: Log::$LVL($MSG, $R->all())
+      - pattern: Log::$LVL($MSG, [..., $K => $R->all(), ...])
+      - pattern: Log::$LVL(json_encode($R->all()))
+      - pattern: logger($MSG, $R->all())
+
+  - id: laravel-public-disk-write
+    languages: [php]
+    severity: INFO
+    message: Write to the public disk. Everything there is reachable at a guessable URL after storage:link. Confirm the file contains no personal or financial data.
+    pattern-either:
+      - pattern: Storage::disk('public')->put(...)
+      - pattern: Storage::disk('public')->putFileAs(...)
+      - pattern: $F->storeAs($P, $N, 'public')
+      - pattern: $F->store($P, 'public')
+      - pattern: $F->storePublicly(...)
+      - pattern: $F->storePubliclyAs(...)
+
+  - id: laravel-original-filename-as-path
+    languages: [php]
+    severity: WARNING
+    message: Client filename used as the stored name. Enables .html/.svg XSS and overwrites. Use store() / hashName() and keep the original name as metadata.
+    pattern-either:
+      - pattern: $F->storeAs($P, $F->getClientOriginalName(), ...)
+      - pattern: $F->move($P, $F->getClientOriginalName())
+
+  - id: laravel-delete-path-from-request
+    languages: [php]
+    severity: ERROR
+    message: File deleted by a path taken from the request. Delete only files tied to the actor (session upload list, tenant-owned DB row).
+    pattern-either:
+      - pattern: Storage::disk($D)->delete($R->input(...))
+      - pattern: Storage::disk($D)->delete($R->$P)
+      - pattern: Storage::delete($R->input(...))
+      - pattern: unlink($R->input(...))
+
+  - id: laravel-tls-verification-disabled
+    languages: [php]
+    severity: WARNING
+    message: TLS verification disabled for an outbound call.
+    pattern-either:
+      - pattern: Http::withoutVerifying()
+      - pattern: $X->withoutVerifying()
+      - pattern: curl_setopt($C, CURLOPT_SSL_VERIFYPEER, false)
+      - pattern: curl_setopt($C, CURLOPT_SSL_VERIFYHOST, 0)
+      - pattern: curl_setopt($C, CURLOPT_SSL_VERIFYHOST, false)
+
+  - id: laravel-browsershot-no-sandbox
+    languages: [php]
+    severity: WARNING
+    message: Chromium without sandbox. Only acceptable inside a container that requires it; never under PHP-FPM on a shared host.
+    pattern: $X->noSandbox()
+
+  - id: laravel-http-call-inside-transaction
+    languages: [php]
+    severity: WARNING
+    message: External HTTP call inside a DB transaction. On rollback the remote side already changed. Dispatch after commit.
+    patterns:
+      - pattern-either:
+          - pattern-inside: DB::transaction(function (...) { ... }, ...)
+          - pattern-inside: DB::transaction(function (...) use ($U) { ... }, ...)
+      - pattern-either:
+          - pattern: Http::$M(...)
+          - pattern: curl_exec(...)
+
+  - id: laravel-commit-in-catch
+    languages: [php]
+    severity: ERROR
+    message: DB::commit() inside a catch block commits a half-applied transaction. Roll back and rethrow.
+    pattern: |
+      try { ... } catch ($E $V) { ... DB::commit(); ... }
+
+  - id: laravel-env-outside-config
+    languages: [php]
+    severity: INFO
+    message: env() outside config/ returns null once config is cached, which often turns a token check into a fail-open comparison.
+    paths:
+      exclude:
+        - "config/**"
+    pattern: env(...)
+
+  - id: blade-raw-output
+    languages: [generic]
+    severity: WARNING
+    message: Raw Blade output. Only allowed for sanitized HTML (clean(), sanitizer) or trusted framework helpers. User, customer and webhook data must use {{ }}.
+    paths:
+      include:
+        - "*.blade.php"
+    patterns:
+      - pattern-regex: '\{!!\s*(?!\s*(clean|purify|sanitize|csrf_field|method_field|__|trans|\$slot)\b)[^!]*!!\}'

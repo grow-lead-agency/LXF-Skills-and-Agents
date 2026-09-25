@@ -2,7 +2,7 @@
 name: ksef-e-invoicing
 description: >-
   Polish KSeF (Krajowy System e-Faktur) e-invoicing integration for the
-  datamixer Laravel app: n1ebieski/ksef-php-client (KSeF 2.0 API), FA(3)
+  platform Laravel app: n1ebieski/ksef-php-client (KSeF 2.0 API), FA(3)
   invoice XML, XAdES auth (robrichards/xmlseclibs), sessions, UPO retrieval,
   queue-based sending, frontend rendering. Trigger on: KSeF, e-faktura,
   faktura ustrukturyzowana, FA(3), UPO, KSeF number, ksef-php-client,
@@ -151,7 +151,7 @@ for custom signing flows (e.g. signing with an externally-held qualified
 cert where you must assemble the XAdES envelope yourself). Never sign
 invoice XML — invoices are not signed, only the auth request is.
 
-## Laravel integration (datamixer conventions)
+## Laravel integration (platform conventions)
 
 - Client wrapper: `app/Services/Ksef/KsefClientFactory.php` — builds the
   client from `config/services.php` (`ksef.mode`, `ksef.nip`, `ksef.token`

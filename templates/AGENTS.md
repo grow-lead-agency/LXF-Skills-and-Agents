@@ -1,4 +1,4 @@
-# datamixer platform — AI agent context
+# Platform — AI agent context
 
 > Template — copy to the repository root as `AGENTS.md`, review the TODOs, and add a thin
 > `CLAUDE.md` next to it containing just: `See AGENTS.md.`
@@ -9,16 +9,16 @@ Three applications in one repository:
 
 | App | Path | Role |
 |---|---|---|
-| **datamixer** | repo root | Laravel 11 backend + admin panel (ERP/WMS, feeds, documents, `/api/v1`) |
-| **BFF** | `bff/bff-nestjs` | NestJS 11 GraphQL backend-for-frontend (storefront ↔ datamixer API) |
+| **backend** | repo root | Laravel 11 backend + admin panel (ERP/WMS, feeds, documents, `/api/v1`) |
+| **BFF** | `bff/bff-nestjs` | NestJS 11 GraphQL backend-for-frontend (storefront ↔ backend API) |
 | **Storefront** | `bff/frontend` | React 19 + Vite 8 SPA, talks GraphQL to the BFF |
 
-Data flow: `storefront → BFF (GraphQL :4000) → datamixer (/api/v1) → MySQL 8`.
+Data flow: `storefront → BFF (GraphQL :4000) → backend (/api/v1) → MySQL 8`.
 
 ## Commands
 
 ```bash
-# datamixer (Laravel, via Sail / Makefile)
+# backend (Laravel, via Sail / Makefile)
 make start / make stop            # sail stack up/down (laravel.test, mysql, redis, phpmyadmin :8001)
 make migrate                      # run migrations
 ./vendor/bin/sail artisan <cmd>   # any artisan command
@@ -31,7 +31,7 @@ make bff-start / make bff-stop    # frontend :3000, bff-nestjs :4000, bff-larave
 cd bff/bff-nestjs && npm test     # Jest 30 unit + e2e (supertest)
 
 # Deploy
-dep deploy                        # Deployer → datamixer.eu (builds assets, reloads supervisor)
+dep deploy                        # Deployer → app.example.com (builds assets, reloads supervisor)
 ```
 
 ## Conventions the agent must follow
@@ -47,10 +47,10 @@ dep deploy                        # Deployer → datamixer.eu (builds assets, re
 - **API**: versioned routes in `routes/api_v1.php`, auth via Sanctum tokens; authorization
   via spatie/laravel-permission roles/permissions — never hardcode role checks.
 - **BFF**: code-first GraphQL — `src/schema.gql` is generated, never edit it by hand.
-  Resolvers stay thin; upstream calls to datamixer live in services using `@nestjs/axios`
-  with `DATAMIXER_BASE_URL` + API-key header.
+  Resolvers stay thin; upstream calls to the backend live in services using `@nestjs/axios`
+  with `UPSTREAM_BASE_URL` + API-key header.
 - **Storefront**: sanitize any product HTML with dompurify before rendering. Lint with oxlint.
-- **Tests are required** for new endpoints/jobs: PHPUnit feature test (datamixer),
+- **Tests are required** for new endpoints/jobs: PHPUnit feature test (backend),
   Jest (BFF). Run the relevant suite before claiming work is done.
 - **Formatting**: Pint (PHP), Prettier (BFF), oxlint (storefront) — before every commit.
 

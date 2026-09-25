@@ -1,0 +1,181 @@
+# CI pipeline for a Laravel + MySQL app on GitHub Actions.
+# Copy to .github/workflows/ci.yml, then edit the two "EDIT ME" env values.
+#
+# Stages (all on push + PR, run in parallel — none of them touch a server):
+#   quality  -> Pint, Larastan (with baseline), composer audit, gitleaks
+#   test     -> MySQL service container, migrate over schema dump (primary) + migrate:fresh without dump (drift check),
+#                phpunit --parallel
+#   frontend -> npm ci, vitest
+#
+# Deploy is a SEPARATE workflow (deploy.yml) — this file never touches the server.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # EDIT ME — pin to the exact PHP version running in production (`php -v` on the server).
+  # A mismatch here is the #1 cause of "works in CI, breaks on deploy" for legacy apps.
+  PHP_VERSION: "8.3"
+  # EDIT ME — org-wide self-hosted runner pool (grow-lead-agency: only self-hosted allowed,
+  # see references/runners.md). Client orgs without a runner pool: delete `vars.CI_RUNNER ||`
+  # and use `ubuntu-latest` directly.
+  NODE_VERSION: "20"
+
+jobs:
+  quality:
+    name: Quality (Pint, Larastan, audit, secrets)
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks + git-diff based checks need history
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          # EDIT ME — match `composer.json` `require.ext-*` (bcmath, curl, dom, gd, libxml, soap
+          # in the reference app) plus whatever extensions your app's require block lists.
+          extensions: bcmath, curl, dom, gd, libxml, soap, mbstring, mysql, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Laravel Pint (format check)
+        run: vendor/bin/pint --test
+
+      - name: Cache Larastan result cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: var/cache/phpstan
+          key: larastan-${{ github.sha }}
+          restore-keys: larastan-
+
+      - name: Larastan (with baseline — see phpstan.neon template)
+        run: vendor/bin/phpstan analyse --no-progress --error-format=github --memory-limit=1G
+
+      - name: Composer audit (known CVEs in dependencies)
+        run: composer audit --no-dev
+        # Legacy app rollout: if this is currently red with dozens of pre-existing CVEs,
+        # start with `continue-on-error: true` + a Linear ticket, drop it once green.
+        # See SKILL.md "Baseline strategy for legacy apps".
+
+      - name: Gitleaks (secret scanning)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE only needed for the paid org-wide dashboard — not required for
+          # basic scan-and-fail-the-build usage on a public or private single repo.
+
+  test:
+    name: PHPUnit (MySQL)
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
+        # mysqladmin ping, not `mysql -e "select 1"` — the socket accepts TCP connections
+        # slightly before the server has finished initializing; ping is the documented probe.
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: bcmath, curl, dom, gd, libxml, soap, mbstring, mysql, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Copy CI env
+        run: cp .env.ci .env && php artisan key:generate --ansi
+        # .env.ci is a committed, secret-free env file (DB_HOST=127.0.0.1, DB_PORT=3306,
+        # DB_DATABASE=testing, DB_USERNAME=root, DB_PASSWORD= — matches the `mysql` service
+        # above). Do NOT reuse phpunit.xml <php> env overrides for DB_* if the app boots a
+        # real DB connection outside of PHPUnit (e.g. in a TestCase::setUp that calls Artisan).
+
+      # PRIMARY path: a committed schema dump instead of replaying every migration.
+      # There is NO `schema:load` artisan command: on an empty database `php artisan migrate`
+      # loads database/schema/<connection>-schema.sql automatically and then runs only the
+      # migrations newer than the dump. For a 600+ migration app that is ~5s vs ~4min.
+      # First adoption on a legacy app: `php artisan schema:dump --database=testing` against a
+      # copy of the current production-equivalent schema, commit database/schema/testing-schema.sql.
+      - name: Migrate (loads schema dump, then newer migrations)
+        run: php artisan migrate --database=testing --force
+
+      # DRIFT CHECK, not the primary path: prove `migrate:fresh` from zero still succeeds.
+      # This is what catches finding (an already-shipped migration was edited after
+      # the fact, so replaying migrations from scratch produces a DIFFERENT schema than the
+      # schema dump / production). Runs against a second throwaway DB so it never affects the
+      # phpunit run above. A failure here means the schema dump is stale or a migration was
+      # edited in place — see references/db-changes.md.
+      - name: migrate:fresh drift check
+        run: |
+          php artisan db:wipe --database=testing --force
+          # --schema-path to a non-existent file = ignore the dump and replay ALL migrations from zero
+          php artisan migrate:fresh --database=testing --force --schema-path=database/schema/does-not-exist.sql
+        continue-on-error: true # legacy-app rollout: flip to hard-fail once green, see SKILL.md
+
+      - name: PHPUnit (parallel)
+        run: php artisan test --parallel --recreate-databases
+        env:
+          APP_ENV: testing
+
+  frontend:
+    name: Vitest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Vitest
+        run: npm run test:js

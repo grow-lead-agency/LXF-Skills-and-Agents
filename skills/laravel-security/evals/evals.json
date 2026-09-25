@@ -1,0 +1,56 @@
+{
+  "skill_name": "laravel-security",
+  "evals": [
+    {
+      "id": 1,
+      "name": "route-exposure-audit",
+      "prompt": "Přebírám cizí Laravel 11 appku (interní ERP, spatie permission). Potřebuju rychle zjistit, které zápisové routy jsou dostupné bez přihlášení nebo jen s auth bez oprávnění, a pohlídat to do budoucna v CI.",
+      "expected_output": "route:list --json + jq filters, warning about routes after the auth group and withoutMiddleware, RouteSecurityTest using gatherRouteMiddleware with public allowlist and baseline ratchet.",
+      "expectations": [
+        "Uses php artisan route:list --json (or gatherRouteMiddleware) to resolve middleware",
+        "Checks both authentication and authorization (permission/can) on POST/PUT/PATCH/DELETE",
+        "Mentions withoutMiddleware on groups as a hole",
+        "Provides a PHPUnit test that fails on new unprotected write routes",
+        "Flags GET routes with side effects"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "shoptet-webhook-signature",
+      "prompt": "We receive Shoptet webhooks in Laravel (order:delete, customer:delete...) and currently just trust them. How do I verify them properly and make the delete handling safe?",
+      "expected_output": "Middleware computing hash_hmac('sha1', raw body, signatureKey) compared with Shoptet-Webhook-Signature via hash_equals, per-eshop key from renew-signature-key, IP range as defense in depth, dedup + queue + fast 200, re-fetch before delete.",
+      "expectations": [
+        "Uses HMAC SHA1 over the raw request body with the per-eshop signatureKey",
+        "Compares with hash_equals and fails closed",
+        "Handles retries/idempotency (Shoptet resends, 4 s ack)",
+        "Re-fetches from Shoptet API before deleting locally",
+        "Validates/encodes eventInstance before using it in API URLs"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "wizard-and-decision-links",
+      "prompt": "Máme veřejného průvodce reklamací (číslo objednávky + e-mail) a v e-mailech odkazy 'zrušit objednávku' s tokenem. Projdi, na co si dát pozor a jak to napsat bezpečně v Laravelu 12.",
+      "expected_output": "Session stores order_id only after verification, later steps use find(session id), throttle + uniform errors, bounded quantities, state guards; links via temporarySignedRoute or hashed token + hash_equals, expiry, single use, POST confirmation, no hardcoded bypass.",
+      "expectations": [
+        "Stores the verified order ID in session only after full verification",
+        "Recommends temporarySignedRoute or hashed token with hash_equals, expiry and single use",
+        "Warns against GET performing the state change (link prefetch)",
+        "Bounds claimed quantity server-side",
+        "Includes a regression test"
+      ]
+    }
+  ],
+  "trigger_queries": [
+    {"query": "udělej mi security audit našeho Laravel projektu, hlavně routy a oprávnění", "should_trigger": true},
+    {"query": "is it ok to use {!! $message->body !!} in blade if the message comes from the customer form?", "should_trigger": true},
+    {"query": "jak v Laravelu ověřit podpis Shoptet webhooku (Shoptet-Webhook-Signature)?", "should_trigger": true},
+    {"query": "our Laravel queue job sometimes sends the same invoice twice, retry_after is 90 and the API is slow", "should_trigger": true},
+    {"query": "potřebuju, aby reklamační formulář běžel v iframe na e-shopu, ale nechci SameSite=None na celý admin (Laravel)", "should_trigger": true},
+    {"query": "review this Laravel PR: new public route for password reset and a permissions sync endpoint", "should_trigger": true},
+    {"query": "vysvětli mi obecně OWASP Top 10 2025 pro školení vývojářů", "should_trigger": false},
+    {"query": "zkontroluj security hlavičky a TLS na našem webu zvenku", "should_trigger": false},
+    {"query": "how do I set up Eloquent relationships and eager loading in Laravel 11?", "should_trigger": false},
+    {"query": "secure my Next.js API routes with Clerk middleware", "should_trigger": false}
+  ]
+}

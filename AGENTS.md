@@ -1,7 +1,7 @@
 # LXF-Skills-and-Agents — onboarding runbook
 
 You are an AI coding agent and a developer has opened this repository (or pointed you at
-it) to set up their AI tooling for the **datamixer / LXF platform** (Laravel 11 backend +
+it) to set up their AI tooling for the **platform** (Laravel 11 backend +
 NestJS 11 GraphQL BFF + React 19 storefront).
 
 This repo is a **complete, self-service handoff**: the skills live here, and this file
@@ -14,11 +14,16 @@ the verification output.
 
 ## Step 1 — Install this skill pack
 
-**Claude Code** (recommended — managed install, updates on `git pull` of the plugin):
+**Claude Code** (recommended — managed install via the plugin marketplace):
 
 ```bash
-claude plugin install https://github.com/grow-lead-agency/LXF-Skills-and-Agents
+claude plugin marketplace add grow-lead-agency/LXF-Skills-and-Agents
+claude plugin install lxf-skills-and-agents@lxf-skills
 ```
+
+Inside a Claude Code session the same works as `/plugin marketplace add grow-lead-agency/LXF-Skills-and-Agents`
+and `/plugin install lxf-skills-and-agents@lxf-skills`. Update later with
+`claude plugin marketplace update lxf-skills` (or `/plugin` → Marketplaces → Update).
 
 **Codex / other agents** (copies editable skill files into the project):
 

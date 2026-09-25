@@ -2,7 +2,7 @@
 name: deployer-php
 description: >-
   Deployer v7 (deployer/deployer) for this repo's deploy.php targeting
-  datamixer.eu: Laravel recipe anatomy (hosts, repository, shared .env/storage,
+  app.example.com: Laravel recipe anatomy (hosts, repository, shared .env/storage,
   writable dirs), zero-downtime symlinked releases, the standard flow (update
   code, composer, migrate, Vite asset build, symlink, php-fpm reload,
   supervisor queue-worker restart), dep rollback, and gotchas (opcache after
@@ -11,13 +11,13 @@ description: >-
   failed", "production still serves old code", "zero downtime deploy".
 ---
 
-# Deployer v7 (deploy.php → datamixer.eu)
+# Deployer v7 (deploy.php → app.example.com)
 
 ## Project conventions
 
 - Deploy config: `deploy.php` at repo root, Deployer v7 (`deployer/deployer`),
   run as `vendor/bin/dep deploy` (or `dep deploy` if installed globally).
-- Target host: **datamixer.eu**. Server stack (provisioned by Terraform in
+- Target host: **app.example.com**. Server stack (provisioned by Terraform in
   this repo): nginx, PHP-FPM, Node, MySQL, Chromium (Browsershot), supervisor
   (queue workers, `QUEUE_CONNECTION=database`), SSL, monitoring.
 - The deploy builds Vite 6 assets **on the server** (`npm ci && npm run build`)
@@ -56,13 +56,13 @@ namespace Deployer;
 require 'recipe/laravel.php';     // Laravel tasks + shared/writable defaults
 require 'contrib/php-fpm.php';    // php-fpm:reload task
 
-set('repository', 'git@github.com:<org>/datamixer.git');
+set('repository', 'git@github.com:<org>/<repo>.git');
 set('php_fpm_version', '8.4');
 set('keep_releases', 5);          // default is 10; releases eat disk
 
-host('datamixer.eu')
+host('app.example.com')
     ->set('remote_user', 'deploy')
-    ->set('deploy_path', '/var/www/datamixer');
+    ->set('deploy_path', '/var/www/app');
 
 // Build Vite assets in the new release, before it goes live
 task('build:assets', function () {
@@ -73,7 +73,7 @@ task('build:assets', function () {
 
 // Restart supervisor-managed queue workers so they pick up new code
 task('supervisor:restart', function () {
-    run('sudo supervisorctl restart all');  // or a specific group: 'datamixer-worker:*'
+    run('sudo supervisorctl restart all');  // or a specific group: 'app-worker:*'
 });
 
 after('deploy:vendors', 'build:assets');
@@ -86,7 +86,7 @@ Key primitives:
 
 - `set('name', value)` / `add('name', [items])` — `add` appends to recipe
   defaults (use `add('shared_dirs', [...])` to extend, `set` to replace).
-- `host('datamixer.eu')` — SSH alias/hostname; per-host settings chain off it.
+- `host('app.example.com')` — SSH alias/hostname; per-host settings chain off it.
 - `task('name', fn)` + `before()`/`after()` hooks compose the pipeline.
 - `run()` executes on the host; `cd('{{release_path}}')` scopes subsequent
   `run()` calls to the new release.

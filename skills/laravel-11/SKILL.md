@@ -1,7 +1,7 @@
 ---
 name: laravel-11
 description: >-
-  Laravel 11 backend development for the datamixer app (repo root, PHP 8.4,
+  Laravel 11 backend development for the platform app (repo root, PHP 8.4,
   MySQL 8.0). Covers the Laravel 11 application layout (bootstrap/app.php
   configuration, middleware and exception registration, casts() on models),
   Eloquent patterns (relationships, scopes, eager loading, chunking), the
@@ -12,9 +12,9 @@ description: >-
   "Form Request", "sail", "api_v1", "N+1", "dispatch".
 ---
 
-# Laravel 11 — datamixer
+# Laravel 11 — platform backend
 
-Backend of the datamixer app lives at the **repo root**. Laravel 11, PHP 8.4 (composer constraint `^8.2`), MySQL 8.0, Redis available but sessions/cache/queues default to the `database` driver (`.env.example`). Local dev runs through **Laravel Sail** (note: Sail container runs PHP 8.3).
+Backend of the platform app lives at the **repo root**. Laravel 11, PHP 8.4 (composer constraint `^8.2`), MySQL 8.0, Redis available but sessions/cache/queues default to the `database` driver (`.env.example`). Local dev runs through **Laravel Sail** (note: Sail container runs PHP 8.3).
 
 ## Laravel 11 layout — what is different
 

@@ -9,7 +9,7 @@ Ground rules:
 - Unit tests never hit the network or Redis. Mock `HttpService` and the Redis
   provider; a unit test that needs Laravel running is a broken test.
 - E2e tests boot the real Nest app (real GraphQL pipeline, real schema build)
-  but override the outermost adapters: `HttpService` / `DatamixerService` and
+  but override the outermost adapters: `HttpService` / `UpstreamService` and
   the `'REDIS'` provider.
 - Assert on behavior visible at the boundary (returned data, thrown
   `GraphQLError`, upstream call arguments) — not on internals.
@@ -74,9 +74,9 @@ Notes:
 
 - Errors from `HttpService` are Observable **errors**: mock with
   `throwError(() => err)`, not by rejecting a Promise.
-- If the service depends on the shared `DatamixerService` wrapper instead of
+- If the service depends on the shared `UpstreamService` wrapper instead of
   `HttpService` directly (preferred), mock the wrapper — its `get`/`post`
-  return Promises, which is simpler: `datamixer.get.mockResolvedValue(...)`.
+  return Promises, which is simpler: `upstream.get.mockResolvedValue(...)`.
 
 ## Unit: resolver with mocked service
 
@@ -151,19 +151,19 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { DatamixerService } from '../src/datamixer/datamixer.service';
+import { UpstreamService } from '../src/upstream/upstream.service';
 
 describe('Catalog (e2e)', () => {
   let app: INestApplication;
-  const datamixer = { get: jest.fn(), post: jest.fn() };
+  const upstream = { get: jest.fn(), post: jest.fn() };
   const redis = { get: jest.fn(), set: jest.fn(), ping: jest.fn() };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(DatamixerService)
-      .useValue(datamixer)
+      .overrideProvider(UpstreamService)
+      .useValue(upstream)
       .overrideProvider('REDIS')
       .useValue(redis)
       .compile();
@@ -177,7 +177,7 @@ describe('Catalog (e2e)', () => {
   });
 
   it('queries a product', async () => {
-    datamixer.get.mockResolvedValue({ id: 1, name: 'Chair', price: 99.9 });
+    upstream.get.mockResolvedValue({ id: 1, name: 'Chair', price: 99.9 });
 
     const res = await request(app.getHttpServer())
       .post('/graphql')
@@ -192,7 +192,7 @@ describe('Catalog (e2e)', () => {
   });
 
   it('surfaces upstream failure as BAD_GATEWAY', async () => {
-    datamixer.get.mockRejectedValue(
+    upstream.get.mockRejectedValue(
       new GraphQLError('Upstream service unavailable', {
         extensions: { code: 'BAD_GATEWAY' },
       }),
@@ -208,7 +208,7 @@ describe('Catalog (e2e)', () => {
   });
 
   it('runs a mutation with input', async () => {
-    datamixer.post.mockResolvedValue({ items: [{ productId: 1, quantity: 2 }] });
+    upstream.post.mockResolvedValue({ items: [{ productId: 1, quantity: 2 }] });
     redis.get.mockResolvedValue(JSON.stringify({ userId: null }));
 
     const res = await request(app.getHttpServer())
@@ -231,7 +231,7 @@ Notes:
 
 - `overrideProvider(...).useValue(...)` must be called **before** `.compile()`;
   overriding by string token works for `'REDIS'`.
-- Overriding `DatamixerService` (Promise API) keeps e2e mocks simple; override
+- Overriding `UpstreamService` (Promise API) keeps e2e mocks simple; override
   `HttpService` only when the test targets the axios wrapper itself.
 - Always send `content-type: application/json` (supertest's `.send(object)`
   does) — Apollo Server 5 CSRF prevention rejects `text/plain` POSTs.

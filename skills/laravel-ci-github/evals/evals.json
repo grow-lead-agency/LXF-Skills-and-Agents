@@ -1,0 +1,12 @@
+[
+  {"id": 1, "query": "Set up a GitHub Actions workflow for our Laravel app with a MySQL 8 service container, Pint and PHPUnit.", "should_trigger": true},
+  {"id": 2, "query": "Nemáme žádné CI, deploy dělám ručně z notebooku přes dep deploy. Jak to zabezpečit přes GitHub Actions, včetně stagingu?", "should_trigger": true},
+  {"id": 3, "query": "How do I run Larastan in CI on a legacy Laravel app without it failing on thousands of pre-existing errors on day one?", "should_trigger": true},
+  {"id": 4, "query": "Potřebuju CI bránu na stovky migrací a testy, co běží jen lokálně nad ručně klonovaným schématem. Jak to spustit v GitHub Actions?", "should_trigger": true},
+  {"id": 5, "query": "Deployer nám nasazuje přes git clone na serveru a build assetů jede přímo na produkci. Chci to přepnout na artifact build v CI a bezpečný deploy s rollbackem.", "should_trigger": true},
+  {"id": 6, "query": "We need a safety check so nobody edits an already-shipped Laravel migration again, plus a drift check between migrate:fresh and the production schema, wired into CI.", "should_trigger": true},
+  {"id": 7, "query": "Napiš mi Form Request pro vytvoření objednávky v Laravel 11 s validací položek a eager loadingem zákazníka.", "should_trigger": false},
+  {"id": 8, "query": "Laravel 11 už nemá bezpečnostní podporu, potřebuju naplánovat upgrade našeho ERP na Laravel 13, jak postupovat krok po kroku?", "should_trigger": false},
+  {"id": 9, "query": "Jak nastavit PHPStan level a baseline pro náš Symfony 5.4 monolit na Sconto, včetně phpstan-doctrine rozšíření?", "should_trigger": false},
+  {"id": 10, "query": "Set up a GitHub Actions CI/CD pipeline for our Cloudflare Worker with D1 migrations and a preview deploy per PR.", "should_trigger": false}
+]

@@ -1,7 +1,7 @@
 ---
 name: mysql-8-for-laravel
 description: >-
-  MySQL 8.0 practices for the Laravel 11 datamixer app: charset/collation
+  MySQL 8.0 practices for the Laravel 11 platform app: charset/collation
   (utf8mb4, unicode_ci vs 0900_ai_ci), index design for Eloquent query patterns
   (composite/covering indexes, whereHas, FK indexes), EXPLAIN / EXPLAIN ANALYZE,
   JSON columns and functional indexes, safe migrations on large tables
@@ -11,7 +11,7 @@ description: >-
   collation, JSON column, cursorPaginate, jobs table, mysqldump, phpMyAdmin.
 ---
 
-# MySQL 8.0 for Laravel 11 (datamixer)
+# MySQL 8.0 for Laravel 11 (platform backend)
 
 ## Project conventions
 

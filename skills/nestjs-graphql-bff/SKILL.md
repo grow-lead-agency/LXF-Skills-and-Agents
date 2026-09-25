@@ -3,21 +3,21 @@ name: nestjs-graphql-bff
 description: >-
   Working on the GraphQL BFF in bff/bff-nestjs: NestJS 11 modules/providers/DI,
   code-first GraphQL with @nestjs/graphql + @nestjs/apollo + @apollo/server 5 on
-  Express 5, thin resolvers proxying the Laravel datamixer /api/v1 API via
+  Express 5, thin resolvers proxying the Laravel /api/v1 API via
   @nestjs/axios, DataLoader batching, ioredis sessions. Trigger for: "BFF",
   "bff-nestjs", "resolver", "mutation", "schema.gql", "GraphQL endpoint",
-  "session module", "datamixer proxy", "NestJS module", "Apollo Server".
+  "session module", "upstream proxy", "NestJS module", "Apollo Server".
 ---
 
 # NestJS GraphQL BFF (bff/bff-nestjs)
 
 The BFF is a thin GraphQL layer between the React storefront and the Laravel
-`datamixer` API. It owns no business data: resolvers translate GraphQL
+`upstream` API. It owns no business data: resolvers translate GraphQL
 operations into upstream REST calls, aggregate responses, and manage
 session/cart state in Redis. Keep it thin — business rules live in Laravel.
 
 ```
-frontend (React 19, :3000) → BFF GraphQL (NestJS 11, :4000) → datamixer /api/v1 (Laravel 11) → MySQL
+frontend (React 19, :3000) → BFF GraphQL (NestJS 11, :4000) → upstream /api/v1 (Laravel 11) → MySQL
                                     ↕ ioredis (redis :6379, sessions/cache)
 ```
 
@@ -31,8 +31,8 @@ frontend (React 19, :3000) → BFF GraphQL (NestJS 11, :4000) → datamixer /api
 - Generated schema: `src/schema.gql`. **Never hand-edit it** — it is emitted
   from decorators at startup. Commit it so schema diffs show up in review.
 - Modules: `auth`, `account`, `catalog`, `cart`/`checkout`, `session`,
-  `datamixer`, `health` (see module map below).
-- Env: `DATAMIXER_BASE_URL` (upstream Laravel base URL), `DATAMIXER_API_KEY`
+  `upstream`, `health` (see module map below).
+- Env: `UPSTREAM_BASE_URL` (upstream Laravel base URL), `UPSTREAM_API_KEY`
   (BFF→Laravel API key; the Laravel side validates it as `BFF_API_KEY`).
 - Lint/format: ESLint 9 (typescript-eslint flat config) + Prettier. Run
   `npm run lint` and `npm run format` before committing.
@@ -46,12 +46,12 @@ Providers are singletons by default; constructor injection everywhere.
 ```ts
 // src/catalog/catalog.module.ts
 import { Module } from '@nestjs/common';
-import { DatamixerModule } from '../datamixer/datamixer.module';
+import { UpstreamModule } from '../upstream/upstream.module';
 import { CatalogResolver } from './catalog.resolver';
 import { CatalogService } from './catalog.service';
 
 @Module({
-  imports: [DatamixerModule],          // shared upstream HTTP client
+  imports: [UpstreamModule],          // shared upstream HTTP client
   providers: [CatalogResolver, CatalogService],
   exports: [CatalogService],           // export only what other modules need
 })
@@ -159,33 +159,33 @@ export class AddToCartInput {
 - After changing any type/resolver, restart the app and review the
   `src/schema.gql` diff — that diff is the API contract change.
 
-## Upstream calls: the datamixer module
+## Upstream calls: the upstream module
 
-The `datamixer` module wraps `@nestjs/axios` with base URL + API key + timeout
+The `upstream` module wraps `@nestjs/axios` with base URL + API key + timeout
 and is the **only** place that talks HTTP to Laravel. Feature services depend
 on it, not on `HttpService` directly.
 
 ```ts
-// src/datamixer/datamixer.module.ts
+// src/upstream/upstream.module.ts
 HttpModule.registerAsync({
   useFactory: (config: ConfigService) => ({
-    baseURL: config.getOrThrow('DATAMIXER_BASE_URL'),
+    baseURL: config.getOrThrow('UPSTREAM_BASE_URL'),
     timeout: 5000,
     headers: { /* API key header the Laravel API expects — see the existing
-                  datamixer service for the exact header name; value comes
-                  from DATAMIXER_API_KEY */ },
+                  upstream service for the exact header name; value comes
+                  from UPSTREAM_API_KEY */ },
   }),
   inject: [ConfigService],
 }),
 ```
 
 ```ts
-// src/datamixer/datamixer.service.ts
+// src/upstream/upstream.service.ts
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
 
 @Injectable()
-export class DatamixerService {
+export class UpstreamService {
   constructor(private readonly http: HttpService) {}
 
   async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
@@ -262,14 +262,14 @@ import { Injectable, Scope } from '@nestjs/common';
 @Injectable({ scope: Scope.REQUEST })
 export class ProductLoader {
   readonly byId = new DataLoader<number, Product | null>(async (ids) => {
-    const products = await this.datamixer.get<Product[]>('/api/v1/products', {
+    const products = await this.upstream.get<Product[]>('/api/v1/products', {
       ids: ids.join(','),                       // bulk endpoint upstream
     });
     const map = new Map(products.map((p) => [p.id, p]));
     return ids.map((id) => map.get(id) ?? null); // MUST match input order/length
   });
 
-  constructor(private readonly datamixer: DatamixerService) {}
+  constructor(private readonly upstream: UpstreamService) {}
 }
 ```
 
@@ -326,7 +326,7 @@ Conventions:
 
 | Module      | Owns                                                                |
 | ----------- | ------------------------------------------------------------------- |
-| `datamixer` | The only upstream HTTP client: base URL, API key, timeout, error mapping. |
+| `upstream` | The only upstream HTTP client: base URL, API key, timeout, error mapping. |
 | `auth`      | Login/logout/token exchange with Laravel Sanctum; puts identity into session. |
 | `session`   | Redis client provider, session CRUD, TTLs, context extraction.       |
 | `account`   | Customer profile queries/mutations (proxied, requires auth).         |

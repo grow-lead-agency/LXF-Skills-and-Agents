@@ -1,0 +1,30 @@
+# Larastan config for a legacy Laravel app adopting CI for the first time.
+# Full PHPStan mechanics (levels, extensions, generic types, custom rules, troubleshooting) —
+# see the `phpstan` skill. This file only covers the Larastan-specific setup + the baseline
+# "ratchet" strategy for a codebase that has never run static analysis before.
+
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon # generated once, see below — commit it
+
+parameters:
+    # Start LOW on a legacy app. `level: 6` on a 600+ migration, 6000-line-controller codebase
+    # would generate thousands of baseline entries on day one and tell you nothing useful.
+    # Bump one level per sprint as the baseline shrinks (see SKILL.md "Baseline strategy").
+    level: 2
+
+    paths:
+        - app
+        - routes
+        - database/factories
+        - database/seeders
+
+    excludePaths:
+        - database/migrations/* # historical migrations are not worth typing retroactively
+        - storage/*
+
+    tmpDir: var/cache/phpstan
+    resultCachePath: var/cache/phpstan/resultCache.php
+
+    reportUnmatchedIgnoredErrors: true # baseline entries that no longer trigger get flagged —
+    # keeps the baseline shrinking instead of silently accumulating dead entries.

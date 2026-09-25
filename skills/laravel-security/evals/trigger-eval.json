@@ -1,0 +1,42 @@
+[
+ {
+  "query": "udělej mi security audit našeho Laravel projektu, hlavně routy a oprávnění",
+  "should_trigger": true
+ },
+ {
+  "query": "is it ok to use {!! $message->body !!} in blade if the message comes from the customer form?",
+  "should_trigger": true
+ },
+ {
+  "query": "jak v Laravelu ověřit podpis Shoptet webhooku (Shoptet-Webhook-Signature)?",
+  "should_trigger": true
+ },
+ {
+  "query": "our Laravel queue job sometimes sends the same invoice twice, retry_after is 90 and the API is slow",
+  "should_trigger": true
+ },
+ {
+  "query": "potřebuju, aby reklamační formulář běžel v iframe na e-shopu, ale nechci SameSite=None na celý admin (Laravel)",
+  "should_trigger": true
+ },
+ {
+  "query": "review this Laravel PR: new public route for password reset and a permissions sync endpoint",
+  "should_trigger": true
+ },
+ {
+  "query": "vysvětli mi obecně OWASP Top 10 2025 pro školení vývojářů",
+  "should_trigger": false
+ },
+ {
+  "query": "zkontroluj security hlavičky a TLS na našem webu zvenku",
+  "should_trigger": false
+ },
+ {
+  "query": "how do I set up Eloquent relationships and eager loading in Laravel 11?",
+  "should_trigger": false
+ },
+ {
+  "query": "secure my Next.js API routes with Clerk middleware",
+  "should_trigger": false
+ }
+]
