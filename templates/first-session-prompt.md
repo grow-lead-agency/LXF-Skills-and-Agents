@@ -18,7 +18,7 @@ I am a developer on this Laravel ERP repository. Onboard me with the LXF-Skills-
 
 4. Security baseline. Run
    `semgrep --config https://raw.githubusercontent.com/grow-lead-agency/LXF-Skills-and-Agents/main/skills/laravel-security/references/semgrep-rules.yml app/ routes/ resources/views/`
-   (install Semgrep first with `pip install semgrep` or `brew install semgrep` if it is missing). Then go through `references/audit-checklist.md` and `references/route-exposure.md` of the `laravel-security` skill: list every route that writes data or returns customer data and has no authentication or authorization middleware. Report all findings grouped by rule, with file:line, severity and a one-line fix, most severe first.
+   (install Semgrep first with `pip install semgrep` or `brew install semgrep` if it is missing). Then go through `references/audit-checklist.md` and `references/route-exposure.md` of the `laravel-security` skill: list every route that writes data or returns customer data and has no authentication or authorization middleware. Report the findings grouped by rule, most severe first, with file:line, severity and a one-line fix. For any rule with more than 20 hits (typically `blade-raw-output` and `laravel-debug-output`), give counts per directory and the ten riskiest examples instead of every line, and tell me which of those hits are real (user-controlled input) versus safe (trusted, already escaped).
 
 5. First pull requests. Based on steps 3 and 4, propose the first five pull requests, smallest and safest first. One PR = one topic, each with a regression test. If the repository has no CI, make "CI gate" (skill `laravel-ci-github`) one of the five. Wait for my approval before writing any code.
 
