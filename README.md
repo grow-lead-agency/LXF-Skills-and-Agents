@@ -29,6 +29,21 @@ and `/plugin install lxf-skills-and-agents@lxf-skills`. Update later with
 Or manually — copy any `skills/<name>/` directory into your repo's `.claude/skills/`
 (project-scoped) or `~/.claude/skills/` (user-scoped).
 
+## First session
+
+Open Claude Code in the platform repository and paste the starter prompt from
+[templates/first-session-prompt.md](templates/first-session-prompt.md). It verifies the install,
+walks through the onboarding runbook ([AGENTS.md](AGENTS.md)), calibrates the skills against your
+code, runs a security baseline (the Semgrep rules and audit checklist shipped with `laravel-security`)
+and proposes the first pull requests. It changes no code; you approve every next step.
+
+The security baseline on its own, without the agent:
+
+```bash
+pip install semgrep   # or: brew install semgrep
+semgrep --config https://raw.githubusercontent.com/grow-lead-agency/LXF-Skills-and-Agents/main/skills/laravel-security/references/semgrep-rules.yml app/ routes/ resources/views/
+```
+
 ## Skills included
 
 | Skill | Covers |

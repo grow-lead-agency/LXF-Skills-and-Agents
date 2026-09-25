@@ -1,6 +1,6 @@
 {
   "name": "lxf-skills-and-agents",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Agent skills for a Laravel ERP platform stack: Laravel 11 to 13 (upgrade, security, CI/CD with Deployer), MySQL 8, Sanctum, spatie/permission, Pusher, KSeF, Shoptet API integration, NestJS 11 GraphQL BFF, React storefront",
   "author": {
     "name": "GrowLead",

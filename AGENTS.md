@@ -35,9 +35,15 @@ npx skills@latest add grow-lead-agency/LXF-Skills-and-Agents
 platform repo's `.claude/skills/` (project-scoped, committed — recommended so the whole
 team gets them) or `~/.claude/skills/` (this machine only).
 
-Verify: run `/plugin` (Claude Code) or list the skills directory — the pack contains
-20 skills (`laravel-11`, `nestjs-graphql-bff`, `mysql-8-for-laravel`, `ksef-e-invoicing`,
-`graphql`, `phpunit`, … full table in [README.md](README.md)).
+Verify: run `/plugin` (Claude Code) or `claude plugin details lxf-skills-and-agents@lxf-skills`.
+The pack contains 28 skills (`laravel-11`, `laravel-upgrade`, `laravel-security`, `laravel-ci-github`,
+`shoptet-api-integration`, `nestjs-graphql-bff`, `mysql-8-for-laravel`, `ksef-e-invoicing`, `graphql`,
+`phpunit`, … full table in [README.md](README.md)).
+
+For the very first session in the platform repo, paste the starter prompt from
+[templates/first-session-prompt.md](templates/first-session-prompt.md): it runs steps 2 to 6 below,
+then a security baseline (Semgrep rules + audit checklist from `laravel-security`) and proposes the
+first pull requests, without changing any code.
 
 ## Step 2 — Install Matt Pocock's process skills
 
