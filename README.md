@@ -23,8 +23,36 @@ claude plugin install lxf-skills-and-agents@lxf-skills
 ```
 
 Inside a Claude Code session the same works as `/plugin marketplace add grow-lead-agency/LXF-Skills-and-Agents`
-and `/plugin install lxf-skills-and-agents@lxf-skills`. Update later with
-`claude plugin marketplace update lxf-skills` (or `/plugin` → Marketplaces → Update).
+and `/plugin install lxf-skills-and-agents@lxf-skills`.
+
+### Keep it updated
+
+Third-party marketplaces do **not** auto-update by default. Pick one:
+
+- **Automatic (recommended), per person, once:** in a Claude Code session run `/plugin`, open the
+  **Marketplaces** tab, select `lxf-skills`, then **Enable auto-update**. New versions download in the
+  background after the next start; run `/reload-plugins` or start a new session to load them.
+- **Automatic for the whole team:** commit this to your application repo as `.claude/settings.json`.
+  Everyone who opens the repo and trusts the folder gets the marketplace with auto-update on:
+
+  ```json
+  {
+    "extraKnownMarketplaces": {
+      "lxf-skills": {
+        "source": { "source": "github", "repo": "grow-lead-agency/LXF-Skills-and-Agents" },
+        "autoUpdate": true
+      }
+    },
+    "enabledPlugins": { "lxf-skills-and-agents@lxf-skills": true }
+  }
+  ```
+
+- **Manual:** `claude plugin marketplace update lxf-skills` refreshes the listing, then
+  `claude plugin update lxf-skills-and-agents@lxf-skills` updates the plugin; restart Claude Code.
+  `claude plugin list` shows the installed version.
+
+Docs: https://code.claude.com/docs/en/discover-plugins (Keep plugins updated),
+https://code.claude.com/docs/en/settings-reference (`extraKnownMarketplaces`, `autoUpdate`).
 
 Or manually — copy any `skills/<name>/` directory into your repo's `.claude/skills/`
 (project-scoped) or `~/.claude/skills/` (user-scoped).
