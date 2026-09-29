@@ -72,7 +72,7 @@ mysqldump --no-data --skip-comments testing > /tmp/fresh-schema.sql
 
 # 2. Compare against the committed schema dump (see #4) — normalize AUTO_INCREMENT values
 #    (they vary run to run and are not a real drift signal)
-sed -E 's/AUTO_INCREMENT=[0-9]+//' database/schema/testing-schema.sql > /tmp/committed-normalized.sql
+sed -E 's/AUTO_INCREMENT=[0-9]+//' database/schema/<connection>-schema.sql > /tmp/committed-normalized.sql
 sed -E 's/AUTO_INCREMENT=[0-9]+//' /tmp/fresh-schema.sql > /tmp/fresh-normalized.sql
 diff /tmp/committed-normalized.sql /tmp/fresh-normalized.sql
 ```
@@ -94,12 +94,12 @@ single SQL file; `php artisan migrate` on an empty DB loads that dump (there is 
 
 ```bash
 # Run locally against a DB that matches production's actual migrated state, then commit:
-php artisan schema:dump --database=testing
+php artisan schema:dump --database=<connection>   # file: database/schema/<connection>-schema.sql
 # --prune also deletes all the migration files it captured — do NOT use --prune on a legacy
 # app during initial CI adoption; keep the migration history for now, re-evaluate later.
 ```
 
-`database/schema/testing-schema.sql` gets committed and is what `ci.yml`'s `test` job loads
+`database/schema/<connection>-schema.sql` gets committed (Laravel names it after the connection: `testing-schema.sql` for a `testing` connection, `mysql-schema.sql` for an app on the default `mysql` connection; `migrate` only picks up the dump of the connection it runs on) and is what `ci.yml`'s `test` job loads
 (`migrate` loads the dump). Re-run `schema:dump` periodically (e.g. quarterly, or after a big batch of
 migrations lands) so the dump doesn't drift too far from HEAD — the goal is a CI job that's
 fast AND representative, not fast at the cost of testing something nobody runs anymore.

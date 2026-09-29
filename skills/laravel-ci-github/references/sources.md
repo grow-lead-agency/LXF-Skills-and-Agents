@@ -50,3 +50,20 @@ pins going forward (re-verify at next update, don't assume permanently).
 - Sibling skills read for ownership boundaries (not duplicated, linked instead):
   `skills/dev/coding/laravel/laravel-11/`, `skills/dev/coding/deployer-php/`,
   `skills/dev/coding/phpstan/`, `skills/infra/deploy-workflow/`, `skills/tools/github-master/`
+
+## 2026-09-29 - fact corrections (AUTO-UPDATE)
+
+- https://github.com/gitleaks/gitleaks-action (README via `gh api repos/gitleaks/gitleaks-action/readme`, v3.0.0):
+  `GITLEAKS_LICENSE` is required for repos owned by an organization, not for personal accounts; the
+  license is free (signup form at https://gitleaks.io). Corrects the earlier claim in `templates/ci.yml`.
+- https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1 - latest release; SHA-256 of
+  `gitleaks_8.30.1_linux_x64.tar.gz` from `gitleaks_8.30.1_checksums.txt` (551f6fc8...470eb), used by the pinned-binary step.
+- https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments -
+  environments/secrets/deployment branches on private repos need Pro/Team/Enterprise; required reviewers and
+  wait timer are public-repo only on Free/Pro/Team (private = Enterprise).
+- https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets -
+  rulesets on private repos: Pro, Team, Enterprise Cloud.
+- https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners -
+  CODEOWNERS in private repos: Pro, Team, Enterprise.
+- https://raw.githubusercontent.com/laravel/framework/12.x/src/Illuminate/Database/Console/DumpCommand.php -
+  `schema:dump` writes `database/schema/{connection name}-schema.sql`.

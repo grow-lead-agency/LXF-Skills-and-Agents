@@ -76,6 +76,7 @@ Does deploy already use Deployer?
 **`ci.yml`** — runs on every push + PR, never touches a server:
 
 1. **quality** — Pint format check, Larastan (with baseline), `composer audit`, gitleaks
+   (pinned binary by default; the official action needs a free `GITLEAKS_LICENSE` on org repos, see Gotchas)
 2. **test** — MySQL 8.0 service container, `migrate` over a committed schema dump (primary path; there is no `schema:load` command) + `migrate:fresh --schema-path=<missing>`
    (drift check, non-blocking during rollout), `php artisan test --parallel`
 3. **frontend** — `npm ci`, Vitest
@@ -92,9 +93,17 @@ approval for production:
 5. **deploy-staging** — download artifact, backup DB, `dep deploy staging` (artifact upload
    instead of git clone, see `templates/deploy.php`), smoke test, auto-rollback on failure
 6. **deploy-production** — same as staging, gated behind a GitHub Environment
-   (`environment: production`) with required reviewers — **that's the manual approval**,
-   not a workflow_dispatch confirmation click. `needs: [build, deploy-staging]` means
-   production can only deploy an artifact that already proved itself on staging.
+   (`environment: production`). `needs: [build, deploy-staging]` means production can only
+   deploy an artifact that already proved itself on staging. **Who approves depends on the
+   plan** (verified 2026-09-29): required reviewers and wait timers on an environment work on
+   **private repos only with GitHub Enterprise**; on Free/Pro/Team they exist only for public
+   repos. Environments, environment secrets and deployment branch policies themselves DO work
+   on private Team repos. So on a private Team repo the human gate is not the environment but
+   a **promote PR into a protected `production` branch** (or release tag) with CODEOWNERS
+   review, protected by a ruleset with the CI check required; adapt the trigger and `if:` of
+   `deploy-production` to that branch; the environment then only scopes secrets and the
+   branch policy. A
+   `workflow_dispatch` confirmation click is not an approval either way.
 
 ## Rollout order for a legacy app with zero CI
 
@@ -104,13 +113,16 @@ it ships. Introduce it in this order — each phase should land as its own PR an
 before starting the next one:
 
 1. **Schema dump first, before any CI workflow exists.** Run `php artisan schema:dump
-   --database=testing` locally against a DB whose migrated state matches production (or
+   --database=<connection>` locally against a DB whose migrated state matches production (or
    as close as you can get — a recent production backup restored locally is ideal).
-   Commit `database/schema/testing-schema.sql`. Without this, `ci.yml`'s `test` job has
+   Commit `database/schema/<connection>-schema.sql`
+   (Laravel names the file after the connection: `testing-schema.sql` for a `testing`
+   connection, `mysql-schema.sql` for an app that uses the default `mysql` connection). Without this, `ci.yml`'s `test` job has
    nothing to load and falls back to replaying 600+ migrations from zero, which is both
    slow and — per `references/db-changes.md` §3 — exactly the thing most likely to be
    silently wrong on a codebase that never checked for drift.
-2. **Pint + gitleaks only.** Both are either pass/fail with zero configuration debt
+2. **Pint + gitleaks only.** (On org repos use the pinned gitleaks binary from `templates/ci.yml`;
+   `gitleaks/gitleaks-action` fails there without the free `GITLEAKS_LICENSE` secret.) Both are either pass/fail with zero configuration debt
    (gitleaks) or auto-fixable in one commit (`vendor/bin/pint` with no `--test`, commit the
    diff, then turn on `--test` in CI). Land this alone first — it proves the workflow
    mechanics (runner, PHP setup, secrets) work before adding anything that can legitimately
@@ -177,4 +189,4 @@ requiring the whole backlog fixed first:
 | `references/staging.md` | Nightly restore + anonymization, no production tokens on staging, egress allowlist, `APP_URL` hardcoding trap |
 | `references/sources.md` | Research log — every URL opened, with live-verified action SHAs |
 
-<!-- Origin: Petr Rohan / Claude | Created: 2026-09-25 | Inspiration: https://github.com/shivammathur/setup-php, https://github.com/larastan/larastan, https://laravel.com/docs/11.x/migrations, https://deployer.org/docs/8.x/recipe/laravel, https://github.com/gitleaks/gitleaks-action -->
+<!-- Origin: Petr Rohan / Claude | Created: 2026-09-25 | Updated: 2026-09-29 (gitleaks-action license, Environment reviewers plan gating, schema dump naming) | Inspiration: https://github.com/shivammathur/setup-php, https://github.com/larastan/larastan, https://laravel.com/docs/11.x/migrations, https://deployer.org/docs/8.x/recipe/laravel, https://github.com/gitleaks/gitleaks-action (README: GITLEAKS_LICENSE required for organizations), https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments -->

@@ -80,12 +80,47 @@ jobs:
         # start with `continue-on-error: true` + a Linear ticket, drop it once green.
         # See SKILL.md "Baseline strategy for legacy apps".
 
-      - name: Gitleaks (secret scanning)
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      # Secret scanning, two supported ways. Pick ONE, delete the other.
+      #
+      # (b) DEFAULT, recommended for repos owned by an organization: pinned gitleaks binary
+      #     with a verified SHA-256. No license key, no company data shared with a third party.
+      #     Scans only the new commits of the push/PR; the full history is a one-off task.
+      #     Bump: take the version from https://github.com/gitleaks/gitleaks/releases and the
+      #     hash from gitleaks_<version>_checksums.txt of that release (last verified 2026-09-29:
+      #     8.30.1, hash below).
+      - name: Gitleaks (secret scanning, pinned binary)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GITLEAKS_LICENSE only needed for the paid org-wide dashboard — not required for
-          # basic scan-and-fail-the-build usage on a public or private single repo.
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb # gitleaks_8.30.1_linux_x64.tar.gz
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          curl -sSfL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          if [ "$EVENT" = "pull_request" ]; then
+            range="${BASE_SHA}..${HEAD_SHA}"
+          elif [ "$EVENT" = "push" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            range="${BEFORE_SHA}..${AFTER_SHA}"
+          else
+            range="-1"
+          fi
+          ./gitleaks git --redact --no-banner --verbose --log-opts="--no-merges ${range}" .
+
+      # (a) ALTERNATIVE: the official action. For repos owned by an ORGANIZATION it REQUIRES
+      #     the secret GITLEAKS_LICENSE (without it the step fails). The license is free:
+      #     register at https://gitleaks.io (form asks for name, e-mail, company), store the
+      #     key as a repo or org secret. Personal accounts need no license. Upside: PR comments.
+      #     Replace the step above with this one to use it:
+      #
+      # - name: Gitleaks (secret scanning, official action)
+      #   uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # required for organizations
 
   test:
     name: PHPUnit (MySQL)
@@ -138,8 +173,11 @@ jobs:
       # There is NO `schema:load` artisan command: on an empty database `php artisan migrate`
       # loads database/schema/<connection>-schema.sql automatically and then runs only the
       # migrations newer than the dump. For a 600+ migration app that is ~5s vs ~4min.
-      # First adoption on a legacy app: `php artisan schema:dump --database=testing` against a
-      # copy of the current production-equivalent schema, commit database/schema/testing-schema.sql.
+      # First adoption on a legacy app: `php artisan schema:dump --database=<connection>` against a
+      # copy of the current production-equivalent schema and commit the result. Laravel names the
+      # file after the CONNECTION: database/schema/<connection>-schema.sql (connection `testing`
+      # -> testing-schema.sql, default `mysql` -> mysql-schema.sql). If the app has no `testing`
+      # connection, use its real one (usually `mysql`) here and drop `--database=testing` below.
       - name: Migrate (loads schema dump, then newer migrations)
         run: php artisan migrate --database=testing --force
 

@@ -8,7 +8,7 @@ security baseline and proposes the first pull requests. It does not change any c
 
 I am a developer on this Laravel ERP repository. Onboard me with the LXF-Skills-and-Agents pack and give me a security baseline. Work step by step, show the verification output of every step, ask before installing anything, and do not change any code in this session.
 
-1. Verify the pack. Confirm the plugin `lxf-skills-and-agents` is installed (version 1.1.1 or newer, 28 skills). If it is not, print these two commands and stop:
+1. Verify the pack. Confirm the plugin `lxf-skills-and-agents` is installed (version 1.1.2 or newer, 28 skills). If it is not, print these two commands and stop:
    `claude plugin marketplace add grow-lead-agency/LXF-Skills-and-Agents`
    `claude plugin install lxf-skills-and-agents@lxf-skills`
 

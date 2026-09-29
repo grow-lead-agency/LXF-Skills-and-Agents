@@ -156,7 +156,10 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     environment:
-      name: production # GitHub Environment with required reviewers — THIS is the human gate.
+      # GitHub Environment. Required reviewers on it work on private repos ONLY with GitHub
+      # Enterprise (public repos: any plan). On Team + private repo the human gate is instead a
+      # promote PR into a protected `production` branch with CODEOWNERS review (see SKILL.md).
+      name: production
       url: https://example.com # EDIT ME
     steps:
       - name: Checkout
